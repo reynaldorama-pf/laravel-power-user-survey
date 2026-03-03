@@ -1,0 +1,24 @@
+{
+  "name": "peoplefinders/power-user-survey",
+  "description": "MTA Power User Survey modal + PeopleFinders offer integration",
+  "type": "library",
+  "license": "proprietary",
+  "require": {
+    "php": ">=7.2",
+    "illuminate/support": ">=5.7 <9.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "PeopleFinders\\PowerUserSurvey\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "PeopleFinders\\PowerUserSurvey\\PowerUserSurveyServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
