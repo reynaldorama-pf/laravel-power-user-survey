@@ -1,48 +1,25 @@
-# PeopleFinders Power User Survey (Modal + Offer)
+# Laravel Power User Survey (Centralized Rate Limit + CAPTCHA + Survey Funnel)
 
-This package adds the MTA “Power User Survey” modal flow and PeopleFinders offer CTA.
-Target: Laravel **5.7.x → 8.x.x** (PHP >= 7.2).  
-(Works best on apps that already use Laravel Mix to bundle JS.)
+This package centralizes the full business logic described:
 
-## What it does
+- Per-IP rate limiting with repeating CAPTCHA cycles and cooldowns
+- 24-hour block after final threshold
+- All popups (CAPTCHA modal OR Survey modal) happen on `/rate-limited`
+- Survey modal uses the provided MTA Power User Survey API (5-step flow)
+- After survey email submission, the modal no longer shows the step-by-step flow on refresh — it shows **"Claim your limited time offer!"**
 
-- Renders a **forced** survey modal (no close button by default) with **5 steps**:
-  1) Intro
-  2) Segment selection
-  3) Interest selection
-  4) Email capture
-  5) PeopleFinders offer (Claim / Maybe later)
-- Implements the API call map:
-  - POST `/v1/survey` on modal display (when not completed)
-  - PATCH `/segment`, `/interest`, `/email`, `/offer`
-- State behavior:
-  - If email not submitted: refresh → starts at step 1 again (POST fires again)
-  - If email submitted: can force showing offer only on refresh (config)
+## Compatibility
 
-## Install (minimal)
+- PHP >= 7.2
+- Laravel 5.7.x → 8.x.x
+- Laravel Mix apps (to bundle the JS)
+- Uses Guzzle for reCAPTCHA verification (server-side)
 
-### 1) Require the package
+## Minimal install
 
-If you host the package internally, a simple option is a **path repository**.
+### 1) Install via Composer
 
-In your app `composer.json`:
-
-```json
-{
-  "repositories": [
-    { "type": "path", "url": "../peoplefinders-power-user-survey", "options": { "symlink": true } }
-  ],
-  "require": {
-    "peoplefinders/power-user-survey": "*"
-  }
-}
-```
-
-Then:
-
-```bash
-composer update peoplefinders/power-user-survey
-```
+Use VCS (GitHub) or path repositories.
 
 ### 2) Publish assets (JS)
 
@@ -50,92 +27,103 @@ composer update peoplefinders/power-user-survey
 php artisan vendor:publish --tag=power-user-survey-assets
 ```
 
-> You can also publish config if you want to override defaults:
->
-> ```bash
-> php artisan vendor:publish --tag=power-user-survey-config
-> ```
-
 ### 3) Add JS to your Laravel Mix entry
 
-In `resources/js/app.js` (or your equivalent entry file):
+In your Mix entry (commonly `resources/js/app.js`):
 
 ```js
 require('./vendor/power-user-survey');
 ```
 
-Then build:
+Build:
 
 ```bash
 npm run dev
 # or npm run production
 ```
 
-### 4) Add your API key
+### 4) Required `.env`
 
-In `.env`:
+Survey API key:
 
 ```env
-PUS_API_KEY=YOUR_KEY_HERE
+PUS_API_KEY=YOUR_SURVEY_API_KEY
 ```
 
-### 5) Render the modal on your blocked page
+reCAPTCHA keys:
 
-In the Blade template for your rate-limited/blocked page:
-
-```blade
-@powerUserSurveyModal()
+```env
+PUS_RECAPTCHA_SITE_KEY=YOUR_RECAPTCHA_SITE_KEY
+PUS_RECAPTCHA_SECRET_KEY=YOUR_RECAPTCHA_SECRET_KEY
 ```
 
-That’s it.
+### 5) Enable the middleware
 
-## How siteId and joinUrl are determined (to minimize settings)
+**Apply to all web traffic** (recommended):
 
-- `siteId`:
-  1) If `PUS_SITE_ID` is set, it is used.
-  2) Otherwise it is derived from `APP_URL` hostname:
-     - `staging.fastpeoplesearch.com` → `fastpeoplesearch`
-     - `www.usphonebook.com` → `usphonebook`
-- `joinUrl`:
-  - If `PUS_JOIN_URL` is set, it is used.
-  - Otherwise it is built as:
-    `https://www.peoplefinders.com/join?utm_source={siteId}&utm_campaign=pow&utm_medium=rate_limit_modal`
+```php
+protected $middlewareGroups = [
+  'web' => [
+    // ...
+    \PeopleFinders\LaravelPowerUserSurvey\Http\Middleware\PowerUserRateLimiterMiddleware::class,
+  ],
+];
+```
 
-## Behavior options
+Or apply only to a route group:
 
-### Force offer screen after email submit
+```php
+Route::middleware(['power-user-rate-limiter'])->group(function () {
+  // protected pages
+});
+```
+
+## How it works (defaults)
+
+Per IP:
+
+- 5 pageviews → CAPTCHA (redirect to `/rate-limited?mode=captcha&r=<original_url>`)
+- CAPTCHA success → 2 minute cooldown (unlimited browsing), advance cycle
+- Repeat CAPTCHA for 3 cycles
+- Next threshold → 24 hour BLOCK (redirect to `/rate-limited?mode=survey&r=<original_url>`)
+- After 24 hours expires → require CAPTCHA once to re-enter, then restart run
+
+All popups render on `/rate-limited`.
+
+## Survey behavior
+
+- On `mode=survey`, the modal:
+  - calls `POST /v1/survey` immediately (screen 1 impression)
+  - proceeds through segment → interest → email → offer
+- If user refreshes before email submission: starts again (POST fires again)
+- After email submission:
+  - localStorage marks completed
+  - on future loads of `/rate-limited`, it shows the offer screen only
+  - no survey API calls fire on those loads
+
+Control:
 
 ```env
 PUS_FORCE_STEP5_IF_COMPLETED=true
 ```
 
-- `true` (default): once email is submitted, future loads show offer screen only and **no API calls** fire.
-- `false`: future loads will re-run the flow (POST /survey) unless you customize logic.
-
-## Theme per application (override colors)
-
-The modal uses CSS variables. Override in each app’s `.env`:
+## Optional configuration
 
 ```env
+PUS_PAGEVIEWS_PER_CYCLE=5
+PUS_COOLDOWN_MINUTES=2
+PUS_CAPTCHA_CYCLES=3
+PUS_BLOCK_HOURS=24
+
+# Optional scope (comma-separated prefixes)
+PUS_APPLY_ONLY_PREFIXES=/person,/search
+
+# Optional exclusions
+PUS_EXCLUDE_PREFIXES=/rate-limited,/power-user-survey
+
+# Theme
 PUS_THEME_PRIMARY=#4A8075
 PUS_THEME_PRIMARY_HOVER=#2f6f64
 PUS_THEME_SELECTED_BG=#e9f3f1
 PUS_THEME_SELECTED_BORDER=#76a79e
 ```
-
-## Optional overrides
-
-```env
-PUS_ENABLED=true
-PUS_BASE_URL=https://angs3br1jh.execute-api.us-east-1.amazonaws.com/prod
-PUS_SITE_ID=usphonebook
-PUS_JOIN_URL=https://www.peoplefinders.com/join?utm_source=usphonebook&utm_campaign=pow&utm_medium=rate_limit_modal
-PUS_SHOW_CLOSE=false
-PUS_MOUNT_SELECTOR=body
-```
-
-## Troubleshooting
-
-- Ensure `@powerUserSurveyModal()` is rendered on the blocked page.
-- Ensure Mix bundle includes `resources/js/vendor/power-user-survey.js`.
-- The JS swallows API errors intentionally (modal must not break browsing). Use DevTools Network tab to debug calls.

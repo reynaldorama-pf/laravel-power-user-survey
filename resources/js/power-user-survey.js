@@ -1,4 +1,4 @@
-/* global window, document, localStorage, crypto, fetch */
+/* global window, document, localStorage, crypto, fetch, grecaptcha */
 (function () {
   function cfg() {
     return (window.PowerUserSurvey && window.PowerUserSurvey.config) ? window.PowerUserSurvey.config : null;
@@ -134,6 +134,8 @@
         color:var(--pus-muted);
         font-size:12px;
       }
+      .pus-recaptcha-wrap{ margin-top: 14px; display:flex; justify-content:center; }
+      .pus-error{ margin-top:10px; font-size:12px; color:#b00020; display:none; }
       @media(max-width:520px){
         .pus-footer{ flex-direction:column; }
         .pus-btn{ width:100%; }
@@ -176,11 +178,24 @@
     return id;
   }
 
-  function http(c, path, method, body) {
-    return fetch(c.baseUrl.replace(/\/$/, '') + path, {
+  function httpJson(url, method, headers, body) {
+    return fetch(url, {
       method: method,
-      headers: { 'Content-Type': 'application/json', 'X-Api-Key': c.apiKey },
-      body: body ? JSON.stringify(body) : undefined
+      headers: headers,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: 'same-origin'
+    }).then(function (r) {
+      if (!r.ok) return null;
+      return r.json().catch(function () { return {}; });
+    }).catch(function () { return null; });
+  }
+
+  function surveyCall(c, path, method, body) {
+    return fetch(c.surveyBaseUrl.replace(/\/$/, '') + path, {
+      method: method,
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': c.surveyApiKey },
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: 'omit'
     }).then(function (r) {
       if (!r.ok) return null;
       return r.json().catch(function () { return {}; });
@@ -205,20 +220,15 @@
     return n;
   }
 
-  function mountModal(c) {
-    injectCssOnce();
-    injectThemeOnce(c);
-
+  function mountOverlay() {
     var overlay = el('div', { class: 'pus-overlay' });
     var card = el('div', { class: 'pus-card' });
-    var body = el('div', { class: 'pus-body', id: 'pus-body' });
-    var footer = el('div', { class: 'pus-footer pus-footer-single', id: 'pus-footer' });
-
+    var body = el('div', { class: 'pus-body' });
+    var footer = el('div', { class: 'pus-footer pus-footer-single' });
     card.appendChild(body);
     card.appendChild(footer);
     overlay.appendChild(card);
-
-    (document.querySelector(c.mountSelector) || document.body).appendChild(overlay);
+    document.body.appendChild(overlay);
 
     function setFooterSingle(btn) {
       footer.className = 'pus-footer pus-footer-single';
@@ -231,15 +241,80 @@
       footer.appendChild(btnLeft);
       footer.appendChild(btnRight);
     }
+    return { overlay: overlay, body: body, setFooterSingle: setFooterSingle, setFooterDual: setFooterDual };
+  }
+
+  function showCaptcha(c) {
+    var ui = mountOverlay();
+    ui.body.innerHTML = '';
+    ui.body.appendChild(el('div', { class: 'pus-title', text: 'Please verify you are human' }));
+    ui.body.appendChild(el('p', { class: 'pus-copy', text: 'To continue, complete the CAPTCHA challenge.' }));
+
+    var err = el('div', { class: 'pus-error', text: 'Captcha failed. Please try again.' });
+    ui.body.appendChild(err);
+
+    if (c.recaptchaEnabled && c.recaptchaSiteKey) {
+      if (!document.getElementById('recaptcha-api')) {
+        var s = document.createElement('script');
+        s.id = 'recaptcha-api';
+        s.src = 'https://www.google.com/recaptcha/api.js';
+        s.async = true;
+        s.defer = true;
+        document.head.appendChild(s);
+      }
+
+      var wrap = el('div', { class: 'pus-recaptcha-wrap' });
+      var box = el('div', { class: 'g-recaptcha', 'data-sitekey': c.recaptchaSiteKey });
+      wrap.appendChild(box);
+      ui.body.appendChild(wrap);
+
+      var btn = el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
+        err.style.display = 'none';
+
+        var tokenEl = document.querySelector('textarea[name="g-recaptcha-response"]');
+        var token = tokenEl ? (tokenEl.value || '').trim() : '';
+
+        if (!token) {
+          err.textContent = 'Please complete the CAPTCHA.';
+          err.style.display = 'block';
+          return;
+        }
+
+        httpJson('/power-user-survey/recaptcha/verify', 'POST', {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }, { token: token }).then(function (data) {
+          if (data && data.ok) {
+            window.location.href = c.redirectTo || '/';
+            return;
+          }
+          err.textContent = 'Captcha failed. Please try again.';
+          err.style.display = 'block';
+          if (typeof grecaptcha !== 'undefined') {
+            try { grecaptcha.reset(); } catch (e) {}
+          }
+        });
+      }});
+      ui.setFooterSingle(btn);
+      return;
+    }
+
+    ui.body.appendChild(el('p', { class: 'pus-copy', text: 'Captcha is not configured. Please contact support.' }));
+    ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'GO BACK', onclick: function () {
+      window.location.href = c.redirectTo || '/';
+    }}));
+  }
+
+  function showSurvey(c) {
+    var ui = mountOverlay();
 
     function step1() {
-      body.innerHTML = '';
-      body.appendChild(el('div', { class: 'pus-title', text: 'Looks like you are getting a lot of use out of FastPeopleSearch.' }));
-      body.appendChild(el('p', { class: 'pus-copy', text: "We're always looking to understand what our most active users need." }));
-      body.appendChild(el('p', { class: 'pus-copy', text: 'Mind answering a couple quick questions?' }));
+      ui.body.innerHTML = '';
+      ui.body.appendChild(el('div', { class: 'pus-title', text: 'Looks like you are getting a lot of use out of FastPeopleSearch.' }));
+      ui.body.appendChild(el('p', { class: 'pus-copy', text: "We're always looking to understand what our most active users need." }));
+      ui.body.appendChild(el('p', { class: 'pus-copy', text: 'Mind answering a couple quick questions?' }));
 
-      var btn = el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: step2 });
-      setFooterSingle(btn);
+      ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: step2 }));
     }
 
     function radioList(options, name, onSelect) {
@@ -261,8 +336,8 @@
     }
 
     function step2() {
-      body.innerHTML = '';
-      body.appendChild(el('div', { class: 'pus-title', text: 'Which best describes you?' }));
+      ui.body.innerHTML = '';
+      ui.body.appendChild(el('div', { class: 'pus-title', text: 'Which best describes you?' }));
 
       var state = { segment: null, segmentOther: '' };
 
@@ -282,21 +357,23 @@
       otherInput.addEventListener('input', function (e) { state.segmentOther = e.target.value || ''; });
       otherWrap.appendChild(otherInput);
 
-      body.appendChild(list);
-      body.appendChild(otherWrap);
+      ui.body.appendChild(list);
+      ui.body.appendChild(otherWrap);
 
-      var btn = el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
+      ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
         if (!state.segment) return;
         var payload = { segment: state.segment };
         if (state.segment === 'other' && state.segmentOther) payload.segmentOther = state.segmentOther;
-        http(c, '/v1/survey/' + c.__deviceId + '/segment', 'PATCH', payload).then(function () { step3(); });
-      }});
-      setFooterSingle(btn);
+
+        surveyCall(c, '/v1/survey/' + c.__deviceId + '/segment', 'PATCH', payload).then(function () {
+          step3();
+        });
+      }}));
     }
 
     function step3() {
-      body.innerHTML = '';
-      body.appendChild(el('div', { class: 'pus-title', text: 'What type of information is most useful to you?' }));
+      ui.body.innerHTML = '';
+      ui.body.appendChild(el('div', { class: 'pus-title', text: 'What type of information is most useful to you?' }));
 
       var state = { interest: null, interestOther: '' };
 
@@ -316,46 +393,46 @@
       otherInput.addEventListener('input', function (e) { state.interestOther = e.target.value || ''; });
       otherWrap.appendChild(otherInput);
 
-      body.appendChild(list);
-      body.appendChild(otherWrap);
+      ui.body.appendChild(list);
+      ui.body.appendChild(otherWrap);
 
-      var btn = el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
+      ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
         if (!state.interest) return;
         var payload = { interest: state.interest };
         if (state.interest === 'other' && state.interestOther) payload.interestOther = state.interestOther;
-        http(c, '/v1/survey/' + c.__deviceId + '/interest', 'PATCH', payload).then(function () { step4(); });
-      }});
-      setFooterSingle(btn);
+
+        surveyCall(c, '/v1/survey/' + c.__deviceId + '/interest', 'PATCH', payload).then(function () {
+          step4();
+        });
+      }}));
     }
 
     function step4() {
-      body.innerHTML = '';
-      body.appendChild(el('div', { class: 'pus-title', text: "Thanks — that's helpful." }));
-      body.appendChild(el('p', { class: 'pus-copy', text: 'Curious what an ad-free experience with unlimited searches and more comprehensive data might look like?' }));
-      body.appendChild(el('p', { class: 'pus-copy', text: "Drop your email if you'd like to learn more" }));
+      ui.body.innerHTML = '';
+      ui.body.appendChild(el('div', { class: 'pus-title', text: "Thanks — that's helpful." }));
+      ui.body.appendChild(el('p', { class: 'pus-copy', text: 'Curious what an ad-free experience with unlimited searches and more comprehensive data might look like?' }));
+      ui.body.appendChild(el('p', { class: 'pus-copy', text: "Drop your email if you'd like to learn more" }));
 
       var email = el('input', { class: 'pus-input', type: 'email', placeholder: 'you@example.com' });
-      body.appendChild(el('div', { style: 'margin-top:12px;' }, [email]));
+      ui.body.appendChild(el('div', { style: 'margin-top:12px;' }, [email]));
 
-      var submit = el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'SUBMIT', onclick: function () {
+      ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'SUBMIT', onclick: function () {
         var e = (email.value || '').trim();
         if (!e) return;
 
-        http(c, '/v1/survey/' + c.__deviceId + '/email', 'PATCH', { email: e }).then(function (data) {
+        surveyCall(c, '/v1/survey/' + c.__deviceId + '/email', 'PATCH', { email: e }).then(function (data) {
           if (data && data.redirectUrl) setRedirect(c, data.redirectUrl);
           if (!getRedirect(c)) setRedirect(c, c.joinUrl);
           setCompleted(c, true);
           step5();
         });
-      }});
-
-      setFooterSingle(submit);
+      }}));
     }
 
     function step5() {
-      body.innerHTML = '';
-      body.appendChild(el('div', { class: 'pus-title', text: 'Claim your limited time offer!' }));
-      body.appendChild(el('p', { class: 'pus-copy', text: 'As a power user you qualify for a special Peoplefinders.com membership — deeper data, no ads, no search limits.' }));
+      ui.body.innerHTML = '';
+      ui.body.appendChild(el('div', { class: 'pus-title', text: 'Claim your limited time offer!' }));
+      ui.body.appendChild(el('p', { class: 'pus-copy', text: 'As a power user you qualify for a special Peoplefinders.com membership — deeper data, no ads, no search limits.' }));
 
       var box = el('div', { class: 'pus-offer-box' });
       var row = el('div', { class: 'pus-price-row' });
@@ -363,33 +440,31 @@
       row.appendChild(el('div', { class: 'pus-now', text: '$9.95' }));
       box.appendChild(row);
       box.appendChild(el('div', { class: 'pus-sub', text: 'for your first month' }));
-      body.appendChild(box);
+      ui.body.appendChild(box);
 
       var maybe = el('button', { class: 'pus-btn pus-btn-outline', text: 'MAYBE LATER', onclick: function () {
-        http(c, '/v1/survey/' + c.__deviceId + '/offer', 'PATCH', { accepted: false }).then(function () {
-          overlay.remove();
+        surveyCall(c, '/v1/survey/' + c.__deviceId + '/offer', 'PATCH', { accepted: false }).then(function () {
+          ui.overlay.remove();
         });
       }});
 
       var claim = el('button', { class: 'pus-btn pus-btn-primary', text: 'CLAIM OFFER', onclick: function () {
         var url = getRedirect(c) || c.joinUrl;
         window.open(url, '_blank');
-        http(c, '/v1/survey/' + c.__deviceId + '/offer', 'PATCH', { accepted: true }).then(function () {
-          overlay.remove();
+        surveyCall(c, '/v1/survey/' + c.__deviceId + '/offer', 'PATCH', { accepted: true }).then(function () {
+          ui.overlay.remove();
         });
       }});
 
-      setFooterDual(maybe, claim);
+      ui.setFooterDual(maybe, claim);
     }
 
-    // Offer-only behavior after completion (configurable)
     if (completed(c) && c.forceStep5IfCompleted) {
       step5();
       return;
     }
 
-    // Start survey on each blocked page load (when not completed)
-    http(c, '/v1/survey', 'POST', {
+    surveyCall(c, '/v1/survey', 'POST', {
       deviceId: c.__deviceId,
       siteId: c.siteId,
       ip: c.ip || undefined,
@@ -402,11 +477,13 @@
   document.addEventListener('DOMContentLoaded', function () {
     var c = cfg();
     if (!c || !c.enabled) return;
-    if (!c.apiKey || !c.baseUrl) return;
-    if (window.__PUS_MOUNTED__) return;
-    window.__PUS_MOUNTED__ = true;
+
+    injectCssOnce();
+    injectThemeOnce(c);
 
     c.__deviceId = getDeviceId(c.storage.device_id);
-    mountModal(c);
+
+    if (c.mode === 'captcha') showCaptcha(c);
+    else if (c.mode === 'survey') showSurvey(c);
   });
 })();

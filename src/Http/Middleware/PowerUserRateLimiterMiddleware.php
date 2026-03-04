@@ -1,0 +1,103 @@
+<?php
+
+namespace PeopleFinders\LaravelPowerUserSurvey\Http\Middleware;
+
+use Closure;
+use PeopleFinders\LaravelPowerUserSurvey\PowerUserState;
+
+class PowerUserRateLimiterMiddleware
+{
+    private $state;
+
+    public function __construct(PowerUserState $state)
+    {
+        $this->state = $state;
+    }
+
+    public function handle($request, Closure $next)
+    {
+        if (!config('power-user-survey.enabled')) return $next($request);
+
+        $path = '/' . ltrim($request->path(), '/');
+
+        foreach ((array) config('power-user-survey.exclude_prefixes', []) as $prefix) {
+            $prefix = trim($prefix);
+            if ($prefix !== '' && strpos($path, $prefix) === 0) return $next($request);
+        }
+
+        $applyOnly = (array) config('power-user-survey.apply_only_prefixes', []);
+        if (!empty($applyOnly)) {
+            $matched = false;
+            foreach ($applyOnly as $prefix) {
+                $prefix = trim($prefix);
+                if ($prefix !== '' && strpos($path, $prefix) === 0) { $matched = true; break; }
+            }
+            if (!$matched) return $next($request);
+        }
+
+        $ip = $request->ip();
+        $now = time();
+        $limits = (array) config('power-user-survey.limits');
+
+        $pageviews = max(1, (int) ($limits['pageviews_per_cycle'] ?? 5));
+        $captchaCycles = max(0, (int) ($limits['captcha_cycles'] ?? 3));
+        $blockHours = max(1, (int) ($limits['block_hours'] ?? 24));
+
+        $state = $this->state->get($ip);
+
+        // Block expired => require captcha to re-enter and reset run
+        if (!empty($state['blocked_until']) && $now >= (int) $state['blocked_until']) {
+            $state['blocked_until'] = null;
+            $state['cycle'] = 0;
+            $state['views'] = 0;
+            $state['cooldown_until'] = null;
+            $state['require_captcha'] = true;
+            $state['reentry_captcha'] = true;
+        }
+
+        // Still blocked => survey mode
+        if (!empty($state['blocked_until']) && $now < (int) $state['blocked_until']) {
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'survey']);
+        }
+
+        // Cooldown => unlimited browsing
+        if (!empty($state['cooldown_until']) && $now < (int) $state['cooldown_until']) {
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return $next($request);
+        }
+
+        // Captcha required => captcha mode
+        if (!empty($state['require_captcha'])) {
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'captcha']);
+        }
+
+        // Count pageview
+        $state['views'] = (int) ($state['views'] ?? 0) + 1;
+
+        if ($state['views'] >= $pageviews) {
+            if ((int) ($state['cycle'] ?? 0) >= $captchaCycles) {
+                // Final threshold => 24h block => survey mode
+                $state['blocked_until'] = $now + ($blockHours * 3600);
+                $state['views'] = 0;
+                $state['cooldown_until'] = null;
+                $state['require_captcha'] = false;
+                $state['reentry_captcha'] = false;
+
+                $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+                return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'survey']);
+            }
+
+            // Require captcha
+            $state['require_captcha'] = true;
+            $state['views'] = 0;
+
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'captcha']);
+        }
+
+        $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+        return $next($request);
+    }
+}

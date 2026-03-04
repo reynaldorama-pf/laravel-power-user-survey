@@ -1,21 +1,25 @@
 {
-  "name": "peoplefinders/power-user-survey",
-  "description": "MTA Power User Survey modal + PeopleFinders offer integration",
+  "name": "peoplefinders/laravel-power-user-survey",
+  "description": "Centralized rate limiting (captcha + block) and MTA Power User Survey modal + PeopleFinders offer integration",
   "type": "library",
   "license": "proprietary",
   "require": {
     "php": ">=7.2",
-    "illuminate/support": ">=5.7 <9.0"
+    "illuminate/support": ">=5.7 <9.0",
+    "illuminate/routing": ">=5.7 <9.0",
+    "illuminate/view": ">=5.7 <9.0",
+    "illuminate/cache": ">=5.7 <9.0",
+    "guzzlehttp/guzzle": "^6.5 || ^7.0"
   },
   "autoload": {
     "psr-4": {
-      "PeopleFinders\\PowerUserSurvey\\": "src/"
+      "PeopleFinders\\LaravelPowerUserSurvey\\": "src/"
     }
   },
   "extra": {
     "laravel": {
       "providers": [
-        "PeopleFinders\\PowerUserSurvey\\PowerUserSurveyServiceProvider"
+        "PeopleFinders\\LaravelPowerUserSurvey\\PowerUserSurveyServiceProvider"
       ]
     }
   },

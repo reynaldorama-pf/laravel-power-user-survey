@@ -1,15 +1,21 @@
 <?php
 
-namespace PeopleFinders\PowerUserSurvey;
+namespace PeopleFinders\LaravelPowerUserSurvey;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Route;
+use PeopleFinders\LaravelPowerUserSurvey\Http\Middleware\PowerUserRateLimiterMiddleware;
 
 class PowerUserSurveyServiceProvider extends ServiceProvider
 {
     public function register()
     {
         $this->mergeConfigFrom(__DIR__ . '/../config/power-user-survey.php', 'power-user-survey');
+
+        $this->app->singleton(PowerUserState::class, function ($app) {
+            return new PowerUserState($app['cache.store']);
+        });
     }
 
     public function boot()
@@ -28,8 +34,27 @@ class PowerUserSurveyServiceProvider extends ServiceProvider
             __DIR__ . '/../resources/js/power-user-survey.js' => resource_path('js/vendor/power-user-survey.js'),
         ], 'power-user-survey-assets');
 
-        Blade::directive('powerUserSurveyModal', function ($expression) {
-            return "<?php echo \\PeopleFinders\\PowerUserSurvey\\Blade\\PowerUserSurveyBlade::render($expression); ?>";
+        Blade::directive('powerUserSurveyPayload', function ($expression) {
+            return "<?php echo \\PeopleFinders\\LaravelPowerUserSurvey\\Views\\Payload::render($expression); ?>";
+        });
+
+        $this->registerRoutes();
+
+        $router = $this->app['router'];
+        $router->aliasMiddleware('power-user-rate-limiter', PowerUserRateLimiterMiddleware::class);
+    }
+
+    protected function registerRoutes()
+    {
+        Route::group([
+            'namespace'  => 'PeopleFinders\\LaravelPowerUserSurvey\\Http\\Controllers',
+            'middleware' => ['web'],
+        ], function () {
+            Route::get(config('power-user-survey.rate_limited_path'), 'RateLimitedController@show')
+                ->name('pus.rate_limited');
+
+            Route::post('/power-user-survey/recaptcha/verify', 'CaptchaController@verify')
+                ->name('pus.recaptcha.verify');
         });
     }
 }
