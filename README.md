@@ -187,6 +187,7 @@ Add the following to `.env`.
 
 ```
 PUS_API_KEY=YOUR_API_KEY
+PUS_SITE_ID=YOUR_SITE_ID
 ```
 
 ### reCAPTCHA

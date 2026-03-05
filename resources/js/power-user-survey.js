@@ -46,7 +46,7 @@
       }
       .pus-copy{
         margin:0;
-        font-size:13px;
+        font-size:15px;
         line-height:1.45;
         color:var(--pus-muted);
       }
@@ -80,7 +80,7 @@
       }
       .pus-btn-outline:hover{ border-color:var(--pus-selected-border); }
       .pus-btn-full{ width:100%; }
-      .pus-list{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
+      .pus-list{ margin-top:10px; display:flex; flex-direction:column; gap:5px; }
       .pus-option{
         border:1px solid var(--pus-border);
         border-radius:6px;
@@ -136,6 +136,7 @@
       }
       .pus-recaptcha-wrap{ margin-top: 14px; display:flex; justify-content:center; }
       .pus-error{ margin-top:10px; font-size:12px; color:#b00020; display:none; }
+      .pus-mt-2{ margin-top:8px; }
       @media(max-width:520px){
         .pus-footer{ flex-direction:column; }
         .pus-btn{ width:100%; }
@@ -307,10 +308,11 @@
 
   function showSurvey(c) {
     var ui = mountOverlay();
+    var appName = (c.appName && String(c.appName).trim()) || 'This App';
 
     function step1() {
       ui.body.innerHTML = '';
-      ui.body.appendChild(el('div', { class: 'pus-title', text: 'Looks like you are getting a lot of use out of FastPeopleSearch.' }));
+      ui.body.appendChild(el('div', { class: 'pus-title', text: 'Looks like you are getting a lot of use out of ' + appName + '.' }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: "We're always looking to understand what our most active users need." }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: 'Mind answering a couple quick questions?' }));
 
@@ -411,7 +413,7 @@
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: "Thanks — that's helpful." }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: 'Curious what an ad-free experience with unlimited searches and more comprehensive data might look like?' }));
-      ui.body.appendChild(el('p', { class: 'pus-copy', text: "Drop your email if you'd like to learn more" }));
+      ui.body.appendChild(el('p', { class: 'pus-mt-2 pus-copy', text: "Drop your email if you'd like to learn more" }));
 
       var email = el('input', { class: 'pus-input', type: 'email', placeholder: 'you@example.com' });
       ui.body.appendChild(el('div', { style: 'margin-top:12px;' }, [email]));

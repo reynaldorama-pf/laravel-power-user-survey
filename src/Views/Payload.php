@@ -15,6 +15,7 @@ class Payload
 
         $payload = [
             'enabled'               => (bool) config('power-user-survey.enabled'),
+            'appName'               => (string) config('power-user-survey.app_name'),
             'surveyBaseUrl'         => rtrim((string) config('power-user-survey.survey_base_url'), '/'),
             'surveyApiKey'          => (string) config('power-user-survey.survey_api_key'),
             'siteId'                => $siteId,
