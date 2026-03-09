@@ -316,3 +316,81 @@ Rules:
 - CAPTCHA verification is handled server-side using **Google siteverify**
 - Survey API requests are executed **from the browser**
 - The modal should **never interrupt the browsing experience**
+
+
+---
+
+# Rate Limited Page Customization
+
+When a visitor exceeds the allowed request limits they are redirected to:
+
+```
+/rate-limited
+```
+
+The package includes a **default minimal view** so it works immediately after installation.
+
+Default message:
+
+```
+Rate Limit Exceeded
+You have exceeded the amount of requests allowed in the allotted time limit.
+```
+
+However, most applications will want this page to **use the application's existing layout
+(header, logo, navigation, footer, etc).**
+
+To support this, the package allows the view to be **published and overridden**.
+
+---
+
+## Publish the Rate Limited View
+
+Run:
+
+```
+php artisan vendor:publish --tag=power-user-survey-views
+```
+
+This will create the file:
+
+```
+resources/views/vendor/power-user-survey/rate-limited.blade.php
+```
+
+---
+
+## Use Your Application Layout
+
+Edit the published file and wrap it with your application's layout.
+
+Example:
+
+```blade
+@extends('layouts.app')
+
+@section('content')
+
+<h1>Rate Limit Exceeded</h1>
+
+<p>
+You have exceeded the amount of requests allowed in the allotted time limit.
+</p>
+
+@endsection
+```
+
+Now the page will automatically use:
+
+- application **header**
+- **logo**
+- **navigation**
+- **footer**
+- application **styling**
+
+while still keeping the package logic intact.
+
+No business logic is affected by overriding this view.
+
+---
+
