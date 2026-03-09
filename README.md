@@ -135,12 +135,32 @@ Changes to the package will immediately apply to the application.
 
 ---
 
-# Publish Package Assets
+# Publish Package Files
+
+## Recommended publish command (overwrites existing files)
 
 Run:
 
 ```
-php artisan vendor:publish --tag=power-user-survey-assets
+php artisan power-user-survey:publish
+```
+
+This publishes the package config, views, and assets and **overwrites existing files**.
+
+You may also publish just one group:
+
+```
+php artisan power-user-survey:publish --only=config
+php artisan power-user-survey:publish --only=views
+php artisan power-user-survey:publish --only=assets
+```
+
+## Laravel vendor:publish
+
+If you prefer Laravel's built-in publish command, use `--force` so existing files are overwritten:
+
+```
+php artisan vendor:publish --tag=power-user-survey-assets --force
 ```
 
 This will publish:
@@ -349,7 +369,13 @@ To support this, the package allows the view to be **published and overridden**.
 Run:
 
 ```
-php artisan vendor:publish --tag=power-user-survey-views
+php artisan power-user-survey:publish --only=views
+```
+
+If using `vendor:publish` directly, use:
+
+```
+php artisan vendor:publish --tag=power-user-survey-views --force
 ```
 
 This will create the file:

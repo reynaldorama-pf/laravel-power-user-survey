@@ -5,6 +5,7 @@ namespace PeopleFinders\LaravelPowerUserSurvey;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Route;
+use PeopleFinders\LaravelPowerUserSurvey\Console\Commands\PublishPowerUserSurveyCommand;
 use PeopleFinders\LaravelPowerUserSurvey\Http\Middleware\PowerUserRateLimiterMiddleware;
 
 class PowerUserSurveyServiceProvider extends ServiceProvider
@@ -33,6 +34,12 @@ class PowerUserSurveyServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__ . '/../resources/js/power-user-survey.js' => resource_path('js/vendor/power-user-survey.js'),
         ], 'power-user-survey-assets');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                PublishPowerUserSurveyCommand::class,
+            ]);
+        }
 
         Blade::directive('powerUserSurveyPayload', function ($expression) {
             return "<?php echo \\PeopleFinders\\LaravelPowerUserSurvey\\Views\\Payload::render($expression); ?>";
