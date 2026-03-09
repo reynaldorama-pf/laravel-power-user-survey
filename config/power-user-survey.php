@@ -16,6 +16,9 @@ return [
     // Join URL fallback (used only if API doesn't return redirectUrl)
     'join_url' => env('PUS_JOIN_URL', null),
 
+    // Special-offer URL base for screen-4 submit. Email is appended in JS.
+    'special_offer_url' => env('PUS_SPECIAL_OFFER_URL', 'https://www.peoplefinders.com/special-offer?utm_source=fastpeoplesearch&utm_medium=rate_limit_modal&utm_campaign=power_user_capture'),
+
     // Rate limit rules (per IP) - FPS defaults
     'limits' => [
         'pageviews_per_cycle' => (int) env('PUS_PAGEVIEWS_PER_CYCLE', 5),

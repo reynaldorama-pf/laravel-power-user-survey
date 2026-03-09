@@ -16,10 +16,21 @@ class RateLimitedController extends Controller
 
     public function show()
     {
-        $mode = request()->query('mode'); // captcha|survey
-        $redirectTo = request()->query('r');
+        $request = request();
+        $mode = $request->query('mode'); // captcha|survey (legacy support)
+        $redirectTo = $request->query('r');
 
-        $ip = request()->ip();
+        if (method_exists($request, 'hasSession') && $request->hasSession()) {
+            if ($mode === null || $mode === '') {
+                $mode = $request->session()->get('pus.rate_limited.mode');
+            }
+
+            if ($redirectTo === null || $redirectTo === '') {
+                $redirectTo = $request->session()->get('pus.rate_limited.redirect_to');
+            }
+        }
+
+        $ip = $request->ip();
         $st = $this->state->get($ip);
         $now = time();
 

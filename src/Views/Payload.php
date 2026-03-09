@@ -20,6 +20,7 @@ class Payload
             'surveyApiKey'          => (string) config('power-user-survey.survey_api_key'),
             'siteId'                => $siteId,
             'joinUrl'               => $joinUrl,
+            'specialOfferUrl'       => (string) config('power-user-survey.special_offer_url'),
             'mountSelector'         => (string) config('power-user-survey.mount_selector'),
             'storage'               => (array) config('power-user-survey.storage'),
             'forceStep5IfCompleted' => (bool) config('power-user-survey.force_step5_if_completed'),

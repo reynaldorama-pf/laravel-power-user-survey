@@ -29,6 +29,7 @@
         z-index:99999;
       }
       .pus-card{
+        position:relative;
         width:640px;
         max-width:92vw;
         background:#fff;
@@ -228,6 +229,7 @@
     var card = el('div', { class: 'pus-card' });
     var body = el('div', { class: 'pus-body' });
     var footer = el('div', { class: 'pus-footer pus-footer-single' });
+
     card.appendChild(body);
     card.appendChild(footer);
     overlay.appendChild(card);
@@ -309,10 +311,55 @@
   }
 
   function showSurvey(c) {
+    var currentScreen = 1;
+    var suppressUnloadClose = false;
+    var unloadTracked = false;
     var ui = mountOverlay();
+
+    function closeSurvey(screen) {
+      suppressUnloadClose = true;
+      surveyCall(c, '/v1/survey/' + c.__deviceId + '/close', 'PATCH', { screen: screen || currentScreen });
+      ui.overlay.remove();
+    }
+
+    function sendCloseOnUnload() {
+      if (suppressUnloadClose || unloadTracked) return;
+      unloadTracked = true;
+
+      // Best-effort close tracking when user leaves/reloads while modal is open.
+      fetch(c.surveyBaseUrl.replace(/\/$/, '') + '/v1/survey/' + c.__deviceId + '/close', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': c.surveyApiKey },
+        body: JSON.stringify({ screen: currentScreen }),
+        credentials: 'omit',
+        keepalive: true
+      }).catch(function () {});
+    }
+
+    window.addEventListener('pagehide', sendCloseOnUnload);
+    window.addEventListener('beforeunload', sendCloseOnUnload);
+
+    function specialOfferUrl(email) {
+      var base = (c.specialOfferUrl && String(c.specialOfferUrl).trim())
+        || 'https://www.peoplefinders.com/special-offer?utm_source=fastpeoplesearch&utm_medium=rate_limit_modal&utm_campaign=power_user_capture';
+
+      base = base.replace(/([?&])email=[^&]*/i, '').replace(/[?&]$/, '');
+
+      var hash = '';
+      var hashIndex = base.indexOf('#');
+      if (hashIndex >= 0) {
+        hash = base.slice(hashIndex);
+        base = base.slice(0, hashIndex);
+      }
+
+      var sep = base.indexOf('?') === -1 ? '?' : '&';
+      return base + sep + 'email=' + encodeURIComponent(email || '') + hash;
+    }
+
     var appName = (c.appName && String(c.appName).trim()) || 'This App';
 
     function step1() {
+      currentScreen = 1;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: 'Looks like you are getting a lot of use out of ' + appName + '.' }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: "We're always looking to understand what our most active users need." }));
@@ -340,6 +387,7 @@
     }
 
     function step2() {
+      currentScreen = 2;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: 'Which best describes you?' }));
 
@@ -376,6 +424,7 @@
     }
 
     function step3() {
+      currentScreen = 3;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: 'What type of information is most useful to you?' }));
 
@@ -412,6 +461,7 @@
     }
 
     function step4() {
+      currentScreen = 4;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: "Thanks — that's helpful." }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: 'Curious what an ad-free experience with unlimited searches and more comprehensive data might look like?' }));
@@ -420,20 +470,26 @@
       var email = el('input', { class: 'pus-input', type: 'email', placeholder: 'you@example.com' });
       ui.body.appendChild(el('div', { style: 'margin-top:12px;' }, [email]));
 
-      ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'SUBMIT', onclick: function () {
+      var noThanks = el('button', { class: 'pus-btn pus-btn-outline', text: 'NO THANKS', onclick: function () {
+        closeSurvey(4);
+      }});
+
+      var submit = el('button', { class: 'pus-btn pus-btn-primary', text: 'SUBMIT', onclick: function () {
         var e = (email.value || '').trim();
         if (!e) return;
 
-        surveyCall(c, '/v1/survey/' + c.__deviceId + '/email', 'PATCH', { email: e }).then(function (data) {
-          if (data && data.redirectUrl) setRedirect(c, data.redirectUrl);
-          if (!getRedirect(c)) setRedirect(c, c.joinUrl);
+        surveyCall(c, '/v1/survey/' + c.__deviceId + '/email', 'PATCH', { email: e }).then(function () {
           setCompleted(c, true);
-          step5();
+          suppressUnloadClose = true;
+          window.location.href = specialOfferUrl(e);
         });
-      }}));
+      }});
+
+      ui.setFooterDual(noThanks, submit);
     }
 
     function step5() {
+      currentScreen = 5;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: 'Claim your limited time offer!' }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: 'As a power user you qualify for a special Peoplefinders.com membership — deeper data, no ads, no search limits.' }));
@@ -448,12 +504,13 @@
 
       var maybe = el('button', { class: 'pus-btn pus-btn-outline', text: 'MAYBE LATER', onclick: function () {
         surveyCall(c, '/v1/survey/' + c.__deviceId + '/offer', 'PATCH', { accepted: false }).then(function () {
-          ui.overlay.remove();
+          closeSurvey(5);
         });
       }});
 
       var claim = el('button', { class: 'pus-btn pus-btn-primary', text: 'CLAIM OFFER', onclick: function () {
-        var url = getRedirect(c) || c.joinUrl;
+        var url = c.joinUrl || getRedirect(c) || '/';
+        suppressUnloadClose = true;
         window.open(url, '_blank');
         surveyCall(c, '/v1/survey/' + c.__deviceId + '/offer', 'PATCH', { accepted: true }).then(function () {
           ui.overlay.remove();
