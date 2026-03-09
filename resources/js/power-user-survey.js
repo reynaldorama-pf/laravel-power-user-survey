@@ -116,6 +116,7 @@
       }
       .pus-price-row{
         display:flex;
+        justify-content: center;
         align-items:baseline;
         gap:10px;
       }
@@ -133,6 +134,7 @@
         margin-top:4px;
         color:var(--pus-muted);
         font-size:12px;
+        text-align:center;
       }
       .pus-recaptcha-wrap{ margin-top: 14px; display:flex; justify-content:center; }
       .pus-error{ margin-top:10px; font-size:12px; color:#b00020; display:none; }

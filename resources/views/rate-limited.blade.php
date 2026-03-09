@@ -15,6 +15,6 @@
 
     @powerUserSurveyPayload(['mode' => $mode, 'redirectTo' => $redirectTo])
 
-    <script src="{{ asset('build/js/power-user-survey.js') }}"></script>
+    <script src="{{ asset('usphonebook/build/js/power-user-survey.js') }}"></script>
   </body>
 </html>
