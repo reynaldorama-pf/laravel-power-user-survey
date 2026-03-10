@@ -496,8 +496,10 @@
 
       var box = el('div', { class: 'pus-offer-box' });
       var row = el('div', { class: 'pus-price-row' });
-      row.appendChild(el('div', { class: 'pus-was', text: '$24.95' }));
-      row.appendChild(el('div', { class: 'pus-now', text: '$9.95' }));
+      var priceWas = (c.priceWas && String(c.priceWas).trim()) || '$24.95';
+      var priceNow = (c.priceNow && String(c.priceNow).trim()) || '$9.95';
+      row.appendChild(el('div', { class: 'pus-was', text: priceWas }));
+      row.appendChild(el('div', { class: 'pus-now', text: priceNow }));
       box.appendChild(row);
       box.appendChild(el('div', { class: 'pus-sub', text: 'for your first month' }));
       ui.body.appendChild(box);

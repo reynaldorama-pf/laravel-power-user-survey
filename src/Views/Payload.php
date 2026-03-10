@@ -21,6 +21,8 @@ class Payload
             'siteId'                => $siteId,
             'joinUrl'               => $joinUrl,
             'specialOfferUrl'       => (string) config('power-user-survey.special_offer_url'),
+            'priceWas'              => (string) config('power-user-survey.price_was', '$24.95'),
+            'priceNow'              => (string) config('power-user-survey.price_now', '$9.95'),
             'mountSelector'         => (string) config('power-user-survey.mount_selector'),
             'storage'               => (array) config('power-user-survey.storage'),
             'forceStep5IfCompleted' => (bool) config('power-user-survey.force_step5_if_completed'),

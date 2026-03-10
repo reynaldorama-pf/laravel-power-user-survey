@@ -19,6 +19,10 @@ return [
     // Special-offer URL base for screen-4 submit. Email is appended in JS.
     'special_offer_url' => env('PUS_SPECIAL_OFFER_URL', 'https://www.peoplefinders.com/special-offer?utm_source=fastpeoplesearch&utm_medium=rate_limit_modal&utm_campaign=power_user_capture'),
 
+    // Offer pricing shown on survey screen 5.
+    'price_was' => env('PUS_PRICE_WAS', '$24.95'),
+    'price_now' => env('PUS_PRICE_NOW', '$9.95'),
+
     // Rate limit rules (per IP) - FPS defaults
     'limits' => [
         'pageviews_per_cycle' => (int) env('PUS_PAGEVIEWS_PER_CYCLE', 5),
