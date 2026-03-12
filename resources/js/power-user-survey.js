@@ -1,14 +1,7 @@
 /* global window, document, localStorage, crypto, fetch, grecaptcha */
 (function () {
   function cfg() {
-    var c = (window.PowerUserSurvey && window.PowerUserSurvey.config) ? window.PowerUserSurvey.config : null;
-    if (!c) return null;
-
-    // Backward-compatible key mapping for older payload shapes.
-    if (!c.surveyBaseUrl && c.baseUrl) c.surveyBaseUrl = c.baseUrl;
-    if (!c.surveyApiKey && c.apiKey) c.surveyApiKey = c.apiKey;
-
-    return c;
+    return (window.PowerUserSurvey && window.PowerUserSurvey.config) ? window.PowerUserSurvey.config : null;
   }
 
   function injectCssOnce() {
@@ -25,7 +18,7 @@
         --pus-selected-bg:#e9f3f1;
         --pus-selected-border:#76a79e;
         --pus-text:#222;
-        --pus-muted:#333;
+        --pus-muted:#555;
       }
       .pus-overlay{
         position:fixed; inset:0;
@@ -36,7 +29,6 @@
         z-index:99999;
       }
       .pus-card{
-        position:relative;
         width:640px;
         max-width:92vw;
         background:#fff;
@@ -55,9 +47,8 @@
       .pus-copy{
         margin:0;
         font-size:15px;
-        font-weight:400;
         line-height:1.45;
-        color:var(--pus-text);
+        color:var(--pus-muted);
       }
       .pus-footer{
         padding:16px 22px;
@@ -89,7 +80,7 @@
       }
       .pus-btn-outline:hover{ border-color:var(--pus-selected-border); }
       .pus-btn-full{ width:100%; }
-      .pus-list{ margin-top:10px; display:flex; flex-direction:column; gap:5px; font-size:16px; font-weight:400; }
+      .pus-list{ margin-top:10px; display:flex; flex-direction:column; gap:5px; }
       .pus-option{
         border:1px solid var(--pus-border);
         border-radius:6px;
@@ -111,8 +102,7 @@
         border:1px solid var(--pus-border);
         border-radius:6px;
         padding:0 12px;
-        font-size:16px;
-        font-weight:400;
+        font-size:13px;
         outline:none;
         box-sizing:border-box;
       }
@@ -133,8 +123,7 @@
       .pus-was{
         text-decoration:line-through;
         color:#777;
-        font-size:16px;
-        font-weight:400;
+        font-size:12px;
       }
       .pus-now{
         font-weight:800;
@@ -144,8 +133,7 @@
       .pus-sub{
         margin-top:4px;
         color:var(--pus-muted);
-        font-size:16px;
-        font-weight:400;
+        font-size:12px;
         text-align:center;
       }
       .pus-recaptcha-wrap{ margin-top: 14px; display:flex; justify-content:center; }
@@ -206,10 +194,7 @@
   }
 
   function surveyCall(c, path, method, body) {
-    var baseUrl = (c && c.surveyBaseUrl) ? String(c.surveyBaseUrl).replace(/\/$/, '') : '';
-    if (!baseUrl) return Promise.resolve(null);
-
-    return fetch(baseUrl + path, {
+    return fetch(c.surveyBaseUrl.replace(/\/$/, '') + path, {
       method: method,
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': c.surveyApiKey },
       body: body ? JSON.stringify(body) : undefined,
@@ -224,31 +209,6 @@
   function setCompleted(c, v) { localStorage.setItem(c.storage.completed, v ? '1' : '0'); }
   function getRedirect(c) { return localStorage.getItem(c.storage.redirect_url) || ''; }
   function setRedirect(c, url) { if (url) localStorage.setItem(c.storage.redirect_url, url); }
-
-  function progressKey(c) {
-    return (c && c.storage && c.storage.progress) ? c.storage.progress : '_pus_progress';
-  }
-
-  function readProgress(c) {
-    try {
-      var raw = localStorage.getItem(progressKey(c));
-      if (!raw) return {};
-      var parsed = JSON.parse(raw);
-      return (parsed && typeof parsed === 'object') ? parsed : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function writeProgress(c, patch) {
-    var current = readProgress(c);
-    var next = Object.assign({}, current, patch || {});
-    localStorage.setItem(progressKey(c), JSON.stringify(next));
-  }
-
-  function clearProgress(c) {
-    localStorage.removeItem(progressKey(c));
-  }
 
   function el(tag, attrs, children) {
     var n = document.createElement(tag);
@@ -268,7 +228,6 @@
     var card = el('div', { class: 'pus-card' });
     var body = el('div', { class: 'pus-body' });
     var footer = el('div', { class: 'pus-footer pus-footer-single' });
-
     card.appendChild(body);
     card.appendChild(footer);
     overlay.appendChild(card);
@@ -350,85 +309,24 @@
   }
 
   function showSurvey(c) {
-    var currentScreen = 1;
-    var initTracked = false;
-    var suppressUnloadClose = false;
-    var unloadTracked = false;
     var ui = mountOverlay();
-
-    function closeSurvey(screen) {
-      suppressUnloadClose = true;
-      surveyCall(c, '/v1/survey/' + c.__deviceId + '/close', 'PATCH', { screen: screen || currentScreen });
-      ui.overlay.remove();
-    }
-
-    function sendCloseOnUnload() {
-      if (suppressUnloadClose || unloadTracked) return;
-      unloadTracked = true;
-
-      // Best-effort close tracking when user leaves/reloads while modal is open.
-      fetch(c.surveyBaseUrl.replace(/\/$/, '') + '/v1/survey/' + c.__deviceId + '/close', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'X-Api-Key': c.surveyApiKey },
-        body: JSON.stringify({ screen: currentScreen }),
-        credentials: 'omit',
-        keepalive: true
-      }).catch(function () {});
-    }
-
-    window.addEventListener('pagehide', sendCloseOnUnload);
-    window.addEventListener('beforeunload', sendCloseOnUnload);
-
-    function specialOfferUrl(email) {
-      var base = (c.specialOfferUrl && String(c.specialOfferUrl).trim())
-        || 'https://www.peoplefinders.com/join?utm_source=usphonebook&utm_campaign=pow&utm_medium=rate_limit_modal';
-
-      base = base.replace(/([?&])email=[^&]*/i, '').replace(/[?&]$/, '');
-
-      var hash = '';
-      var hashIndex = base.indexOf('#');
-      if (hashIndex >= 0) {
-        hash = base.slice(hashIndex);
-        base = base.slice(0, hashIndex);
-      }
-
-      var sep = base.indexOf('?') === -1 ? '?' : '&';
-      return base + sep + 'email=' + encodeURIComponent(email || '') + hash;
-    }
-
     var appName = (c.appName && String(c.appName).trim()) || 'This App';
 
     function step1() {
-      currentScreen = 1;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: 'Looks like you are getting a lot of use out of ' + appName + '.' }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: "We're always looking to understand what our most active users need." }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: 'Mind answering a couple quick questions?' }));
 
-      if (!initTracked) {
-        initTracked = true;
-        surveyCall(c, '/v1/survey', 'POST', {
-          deviceId: c.__deviceId,
-          siteId: c.siteId,
-          ip: c.ip || undefined,
-          userAgent: navigator.userAgent
-        });
-      }
-
       ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: step2 }));
     }
 
-    function radioList(options, name, selectedValue, onSelect) {
+    function radioList(options, name, onSelect) {
       var wrap = el('div', { class: 'pus-list' });
       options.forEach(function (o) {
         var input = el('input', { type: 'radio', name: name, value: o.value });
         var label = el('div', { text: o.label });
         var row = el('label', { class: 'pus-option' }, [input, label]);
-
-        if (selectedValue && selectedValue === o.value) {
-          input.checked = true;
-          row.classList.add('selected');
-        }
 
         input.addEventListener('change', function () {
           Array.prototype.forEach.call(wrap.querySelectorAll('.pus-option'), function (r) { r.classList.remove('selected'); });
@@ -442,15 +340,10 @@
     }
 
     function step2() {
-      currentScreen = 2;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: 'Which best describes you?' }));
 
-      var progress = readProgress(c);
-      var state = {
-        segment: progress.segment || null,
-        segmentOther: progress.segmentOther || ''
-      };
+      var state = { segment: null, segmentOther: '' };
 
       var list = radioList([
         { value: 'individual', label: 'Individual/Personal Use' },
@@ -458,32 +351,21 @@
         { value: 'business_marketing', label: 'Business/Marketing' },
         { value: 'legal_investigations', label: 'Legal/Investigations' },
         { value: 'other', label: 'Other' }
-      ], 'pus-segment', state.segment, function (v) {
+      ], 'pus-segment', function (v) {
         state.segment = v;
         otherWrap.style.display = (v === 'other') ? 'block' : 'none';
-        writeProgress(c, { segment: state.segment, segmentOther: state.segmentOther });
       });
 
-      var otherWrap = el('div', { style: (state.segment === 'other') ? 'display:block;margin-top:10px;' : 'display:none;margin-top:10px;' });
+      var otherWrap = el('div', { style: 'display:none;margin-top:10px;' });
       var otherInput = el('input', { class: 'pus-input', type: 'text', placeholder: 'Please specify' });
-      otherInput.value = state.segmentOther;
-      otherInput.addEventListener('input', function (e) {
-        state.segmentOther = e.target.value || '';
-        writeProgress(c, { segment: state.segment, segmentOther: state.segmentOther });
-      });
+      otherInput.addEventListener('input', function (e) { state.segmentOther = e.target.value || ''; });
       otherWrap.appendChild(otherInput);
 
       ui.body.appendChild(list);
       ui.body.appendChild(otherWrap);
-      var err = el('div', { class: 'pus-error', text: 'Please select one option to continue.' });
-      ui.body.appendChild(err);
 
       ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
-        if (!state.segment) {
-          err.style.display = 'block';
-          return;
-        }
-        err.style.display = 'none';
+        if (!state.segment) return;
         var payload = { segment: state.segment };
         if (state.segment === 'other' && state.segmentOther) payload.segmentOther = state.segmentOther;
 
@@ -494,15 +376,10 @@
     }
 
     function step3() {
-      currentScreen = 3;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: 'What type of information is most useful to you?' }));
 
-      var progress = readProgress(c);
-      var state = {
-        interest: progress.interest || null,
-        interestOther: progress.interestOther || ''
-      };
+      var state = { interest: null, interestOther: '' };
 
       var list = radioList([
         { value: 'contact_info', label: 'Contact Info' },
@@ -510,32 +387,21 @@
         { value: 'property_assets', label: 'Property and Assets' },
         { value: 'family_associates', label: 'Family and Associates' },
         { value: 'other', label: 'Other' }
-      ], 'pus-interest', state.interest, function (v) {
+      ], 'pus-interest', function (v) {
         state.interest = v;
         otherWrap.style.display = (v === 'other') ? 'block' : 'none';
-        writeProgress(c, { interest: state.interest, interestOther: state.interestOther });
       });
 
-      var otherWrap = el('div', { style: (state.interest === 'other') ? 'display:block;margin-top:10px;' : 'display:none;margin-top:10px;' });
+      var otherWrap = el('div', { style: 'display:none;margin-top:10px;' });
       var otherInput = el('input', { class: 'pus-input', type: 'text', placeholder: 'Please specify' });
-      otherInput.value = state.interestOther;
-      otherInput.addEventListener('input', function (e) {
-        state.interestOther = e.target.value || '';
-        writeProgress(c, { interest: state.interest, interestOther: state.interestOther });
-      });
+      otherInput.addEventListener('input', function (e) { state.interestOther = e.target.value || ''; });
       otherWrap.appendChild(otherInput);
 
       ui.body.appendChild(list);
       ui.body.appendChild(otherWrap);
-      var err = el('div', { class: 'pus-error', text: 'Please select one option to continue.' });
-      ui.body.appendChild(err);
 
       ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
-        if (!state.interest) {
-          err.style.display = 'block';
-          return;
-        }
-        err.style.display = 'none';
+        if (!state.interest) return;
         var payload = { interest: state.interest };
         if (state.interest === 'other' && state.interestOther) payload.interestOther = state.interestOther;
 
@@ -546,7 +412,6 @@
     }
 
     function step4() {
-      currentScreen = 4;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: "Thanks — that's helpful." }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: 'Curious what an ad-free experience with unlimited searches and more comprehensive data might look like?' }));
@@ -555,49 +420,41 @@
       var email = el('input', { class: 'pus-input', type: 'email', placeholder: 'you@example.com' });
       ui.body.appendChild(el('div', { style: 'margin-top:12px;' }, [email]));
 
-      var noThanks = el('button', { class: 'pus-btn pus-btn-outline', text: 'NO THANKS', onclick: function () {
-        closeSurvey(4);
-      }});
-
-      var submit = el('button', { class: 'pus-btn pus-btn-primary', text: 'SUBMIT', onclick: function () {
+      ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'SUBMIT', onclick: function () {
         var e = (email.value || '').trim();
         if (!e) return;
 
-        surveyCall(c, '/v1/survey/' + c.__deviceId + '/email', 'PATCH', { email: e }).then(function () {
+        surveyCall(c, '/v1/survey/' + c.__deviceId + '/email', 'PATCH', { email: e }).then(function (data) {
+          if (data && data.redirectUrl) setRedirect(c, data.redirectUrl);
+          if (!getRedirect(c)) setRedirect(c, c.joinUrl);
           setCompleted(c, true);
-          clearProgress(c);
-          suppressUnloadClose = true;
-          window.location.href = specialOfferUrl(e);
+          step5();
         });
-      }});
-
-      ui.setFooterDual(noThanks, submit);
+      }}));
     }
 
     function step5() {
-      currentScreen = 5;
       ui.body.innerHTML = '';
       ui.body.appendChild(el('div', { class: 'pus-title', text: 'Claim your limited time offer!' }));
       ui.body.appendChild(el('p', { class: 'pus-copy', text: 'As a power user you qualify for a special Peoplefinders.com membership — deeper data, no ads, no search limits.' }));
 
       var box = el('div', { class: 'pus-offer-box' });
       var row = el('div', { class: 'pus-price-row' });
-      var priceWas = (c.priceWas && String(c.priceWas).trim()) || '$24.95';
-      var priceNow = (c.priceNow && String(c.priceNow).trim()) || '$9.95';
-      row.appendChild(el('div', { class: 'pus-was', text: priceWas }));
-      row.appendChild(el('div', { class: 'pus-now', text: priceNow }));
+      row.appendChild(el('div', { class: 'pus-was', text: '$24.95' }));
+      row.appendChild(el('div', { class: 'pus-now', text: '$9.95' }));
       box.appendChild(row);
       box.appendChild(el('div', { class: 'pus-sub', text: 'for your first month' }));
       ui.body.appendChild(box);
 
       var maybe = el('button', { class: 'pus-btn pus-btn-outline', text: 'MAYBE LATER', onclick: function () {
-        closeSurvey(5);
+        surveyCall(c, '/v1/survey/' + c.__deviceId + '/offer', 'PATCH', { accepted: false }).then(function () {
+          ui.overlay.remove();
+        });
       }});
 
       var claim = el('button', { class: 'pus-btn pus-btn-primary', text: 'CLAIM OFFER', onclick: function () {
-        var url = c.joinUrl || getRedirect(c) || '/';
-        suppressUnloadClose = true;
-        window.open(url, '_blank', 'noopener');
+        var url = getRedirect(c) || c.joinUrl;
+        window.open(url, '_blank');
         surveyCall(c, '/v1/survey/' + c.__deviceId + '/offer', 'PATCH', { accepted: true }).then(function () {
           ui.overlay.remove();
         });
@@ -611,10 +468,17 @@
       return;
     }
 
-    step1();
+    surveyCall(c, '/v1/survey', 'POST', {
+      deviceId: c.__deviceId,
+      siteId: c.siteId,
+      ip: c.ip || undefined,
+      userAgent: navigator.userAgent
+    }).then(function () {
+      step1();
+    });
   }
 
-  function initSurvey() {
+  document.addEventListener('DOMContentLoaded', function () {
     var c = cfg();
     if (!c || !c.enabled) return;
 
@@ -625,11 +489,5 @@
 
     if (c.mode === 'captcha') showCaptcha(c);
     else if (c.mode === 'survey') showSurvey(c);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSurvey);
-  } else {
-    initSurvey();
-  }
+  });
 })();

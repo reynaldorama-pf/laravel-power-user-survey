@@ -7,7 +7,7 @@ return [
     'app_name' => env('PUS_APP_NAME', 'This App'),
 
     // Survey API (browser calls)
-    'survey_base_url' => env('PUS_SURVEY_BASE_URL', env('PUS_BASE_URL', 'https://angs3br1jh.execute-api.us-east-1.amazonaws.com/prod')),
+    'survey_base_url' => env('PUS_BASE_URL', 'https://angs3br1jh.execute-api.us-east-1.amazonaws.com/prod'),
     'survey_api_key'  => env('PUS_API_KEY', ''),
 
     // Site ID derived from APP_URL unless overridden
@@ -15,13 +15,6 @@ return [
 
     // Join URL fallback (used only if API doesn't return redirectUrl)
     'join_url' => env('PUS_JOIN_URL', null),
-
-    // Special-offer URL base for screen-4 submit. Email is appended in JS.
-    'special_offer_url' => env('PUS_SPECIAL_OFFER_URL', 'https://www.peoplefinders.com/join?utm_source=usphonebook&utm_campaign=pow&utm_medium=rate_limit_modal'),
-
-    // Offer pricing shown on survey screen 5.
-    'price_was' => env('PUS_PRICE_WAS', '$24.95'),
-    'price_now' => env('PUS_PRICE_NOW', '$9.95'),
 
     // Rate limit rules (per IP) - FPS defaults
     'limits' => [

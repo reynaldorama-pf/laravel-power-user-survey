@@ -41,6 +41,17 @@ class PowerUserSurveyServiceProvider extends ServiceProvider
             ]);
         }
 
+        if (!config('power-user-survey.enabled')) {
+            // Redirect all PUS-owned paths to homepage so stale links don't 404
+            $prefixes = (array) config('power-user-survey.exclude_prefixes', []);
+            foreach ($prefixes as $prefix) {
+                $prefix = '/' . ltrim(trim($prefix), '/');
+                Route::middleware(['web'])->get($prefix, fn () => redirect('/'));
+                Route::middleware(['web'])->get($prefix . '/{any}', fn () => redirect('/'))->where('any', '.*');
+            }
+            return;
+        }
+
         Blade::directive('powerUserSurveyPayload', function ($expression) {
             return "<?php echo \\PeopleFinders\\LaravelPowerUserSurvey\\Views\\Payload::render($expression); ?>";
         });
@@ -49,6 +60,7 @@ class PowerUserSurveyServiceProvider extends ServiceProvider
 
         $router = $this->app['router'];
         $router->aliasMiddleware('power-user-rate-limiter', PowerUserRateLimiterMiddleware::class);
+        $router->pushMiddlewareToGroup('web', PowerUserRateLimiterMiddleware::class);
     }
 
     protected function registerRoutes()

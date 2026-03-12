@@ -58,7 +58,7 @@ class PowerUserRateLimiterMiddleware
         // Still blocked => survey mode
         if (!empty($state['blocked_until']) && $now < (int) $state['blocked_until']) {
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return $this->redirectToRateLimited($request, 'survey');
+            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'survey']);
         }
 
         // Cooldown => unlimited browsing
@@ -70,7 +70,7 @@ class PowerUserRateLimiterMiddleware
         // Captcha required => captcha mode
         if (!empty($state['require_captcha'])) {
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return $this->redirectToRateLimited($request, 'captcha');
+            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'captcha']);
         }
 
         // Count pageview
@@ -86,7 +86,7 @@ class PowerUserRateLimiterMiddleware
                 $state['reentry_captcha'] = false;
 
                 $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-                return $this->redirectToRateLimited($request, 'survey');
+                return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'survey']);
             }
 
             // Require captcha
@@ -94,21 +94,10 @@ class PowerUserRateLimiterMiddleware
             $state['views'] = 0;
 
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return $this->redirectToRateLimited($request, 'captcha');
+            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'captcha']);
         }
 
         $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
         return $next($request);
-    }
-
-    private function redirectToRateLimited($request, $mode)
-    {
-        if (method_exists($request, 'hasSession') && $request->hasSession()) {
-            $request->session()->put('pus.rate_limited.mode', $mode);
-            $request->session()->put('pus.rate_limited.redirect_to', $request->fullUrl());
-        }
-
-        // Keep URL clean: /rate-limited (no mode/r query params).
-        return redirect()->route('pus.rate_limited');
     }
 }
