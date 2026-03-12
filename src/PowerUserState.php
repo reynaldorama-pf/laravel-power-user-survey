@@ -33,6 +33,25 @@ class PowerUserState
                 'require_captcha' => false,
                 'reentry_captcha' => false,
             ];
+            return $state;
+        }
+
+        $now = time();
+
+        $state['cycle'] = max(0, (int) ($state['cycle'] ?? 0));
+        $state['views'] = max(0, (int) ($state['views'] ?? 0));
+        $state['cooldown_until'] = !empty($state['cooldown_until']) ? (int) $state['cooldown_until'] : null;
+        $state['blocked_until'] = !empty($state['blocked_until']) ? (int) $state['blocked_until'] : null;
+        $state['require_captcha'] = !empty($state['require_captcha']);
+        $state['reentry_captcha'] = !empty($state['reentry_captcha']);
+
+        if ($state['cooldown_until'] !== null && $state['cooldown_until'] <= $now) {
+            $state['cooldown_until'] = null;
+        }
+
+        if ($state['cooldown_until'] !== null && $state['cooldown_until'] > $now) {
+            $state['require_captcha'] = false;
+            $state['reentry_captcha'] = false;
         }
 
         return $state;

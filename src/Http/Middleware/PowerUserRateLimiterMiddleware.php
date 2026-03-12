@@ -58,7 +58,7 @@ class PowerUserRateLimiterMiddleware
         // Still blocked => survey mode
         if (!empty($state['blocked_until']) && $now < (int) $state['blocked_until']) {
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'survey']);
+            return $this->redirectToRateLimited($request, 'survey');
         }
 
         // Cooldown => unlimited browsing
@@ -70,13 +70,13 @@ class PowerUserRateLimiterMiddleware
         // Captcha required => captcha mode
         if (!empty($state['require_captcha'])) {
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'captcha']);
+            return $this->redirectToRateLimited($request, 'captcha');
         }
 
         // Count pageview
         $state['views'] = (int) ($state['views'] ?? 0) + 1;
 
-        if ($state['views'] >= $pageviews) {
+        if ($state['views'] > $pageviews) {
             if ((int) ($state['cycle'] ?? 0) >= $captchaCycles) {
                 // Final threshold => 24h block => survey mode
                 $state['blocked_until'] = $now + ($blockHours * 3600);
@@ -86,7 +86,7 @@ class PowerUserRateLimiterMiddleware
                 $state['reentry_captcha'] = false;
 
                 $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-                return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'survey']);
+                return $this->redirectToRateLimited($request, 'survey');
             }
 
             // Require captcha
@@ -94,10 +94,18 @@ class PowerUserRateLimiterMiddleware
             $state['views'] = 0;
 
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return redirect()->route('pus.rate_limited', ['r' => $request->fullUrl(), 'mode' => 'captcha']);
+            return $this->redirectToRateLimited($request, 'captcha');
         }
 
         $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
         return $next($request);
+    }
+
+    protected function redirectToRateLimited($request, $mode)
+    {
+        $request->session()->put('pus.rate_limited.mode', $mode);
+        $request->session()->put('pus.rate_limited.redirect_to', $mode === 'captcha' ? $request->fullUrl() : null);
+
+        return redirect()->route('pus.rate_limited');
     }
 }

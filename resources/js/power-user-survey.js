@@ -354,20 +354,35 @@
       ], 'pus-segment', function (v) {
         state.segment = v;
         otherWrap.style.display = (v === 'other') ? 'block' : 'none';
+        if (v !== 'other' || (state.segmentOther || '').trim()) err.style.display = 'none';
       });
 
       var otherWrap = el('div', { style: 'display:none;margin-top:10px;' });
       var otherInput = el('input', { class: 'pus-input', type: 'text', placeholder: 'Please specify' });
-      otherInput.addEventListener('input', function (e) { state.segmentOther = e.target.value || ''; });
+      otherInput.addEventListener('input', function (e) {
+        state.segmentOther = e.target.value || '';
+        if (state.segment !== 'other' || (state.segmentOther || '').trim()) err.style.display = 'none';
+      });
       otherWrap.appendChild(otherInput);
 
       ui.body.appendChild(list);
       ui.body.appendChild(otherWrap);
+      var err = el('div', { class: 'pus-error', text: 'Please specify what you mean by Other' });
+      ui.body.appendChild(err);
 
       ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
-        if (!state.segment) return;
+        err.style.display = 'none';
+        if (!state.segment) {
+          return;
+        }
+
+        if (state.segment === 'other' && !(state.segmentOther || '').trim()) {
+          err.textContent = 'Please specify what you mean by Other';
+          err.style.display = 'block';
+          return;
+        }
         var payload = { segment: state.segment };
-        if (state.segment === 'other' && state.segmentOther) payload.segmentOther = state.segmentOther;
+        if (state.segment === 'other') payload.segmentOther = (state.segmentOther || '').trim();
 
         surveyCall(c, '/v1/survey/' + c.__deviceId + '/segment', 'PATCH', payload).then(function () {
           step3();
@@ -390,20 +405,35 @@
       ], 'pus-interest', function (v) {
         state.interest = v;
         otherWrap.style.display = (v === 'other') ? 'block' : 'none';
+        if (v !== 'other' || (state.interestOther || '').trim()) err.style.display = 'none';
       });
 
       var otherWrap = el('div', { style: 'display:none;margin-top:10px;' });
       var otherInput = el('input', { class: 'pus-input', type: 'text', placeholder: 'Please specify' });
-      otherInput.addEventListener('input', function (e) { state.interestOther = e.target.value || ''; });
+      otherInput.addEventListener('input', function (e) {
+        state.interestOther = e.target.value || '';
+        if (state.interest !== 'other' || (state.interestOther || '').trim()) err.style.display = 'none';
+      });
       otherWrap.appendChild(otherInput);
 
       ui.body.appendChild(list);
       ui.body.appendChild(otherWrap);
+      var err = el('div', { class: 'pus-error', text: 'Please specify what you mean by Other' });
+      ui.body.appendChild(err);
 
       ui.setFooterSingle(el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
-        if (!state.interest) return;
+        err.style.display = 'none';
+        if (!state.interest) {
+          return;
+        }
+
+        if (state.interest === 'other' && !(state.interestOther || '').trim()) {
+          err.textContent = 'Please specify what you mean by Other';
+          err.style.display = 'block';
+          return;
+        }
         var payload = { interest: state.interest };
-        if (state.interest === 'other' && state.interestOther) payload.interestOther = state.interestOther;
+        if (state.interest === 'other') payload.interestOther = (state.interestOther || '').trim();
 
         surveyCall(c, '/v1/survey/' + c.__deviceId + '/interest', 'PATCH', payload).then(function () {
           step4();

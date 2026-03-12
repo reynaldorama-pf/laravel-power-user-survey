@@ -16,8 +16,16 @@ class RateLimitedController extends Controller
 
     public function show()
     {
-        $mode = request()->query('mode'); // captcha|survey
-        $redirectTo = request()->query('r');
+        $mode = request()->session()->get('pus.rate_limited.mode'); // captcha|survey
+        $redirectTo = request()->session()->get('pus.rate_limited.redirect_to');
+
+        // Backward compatibility for old links
+        if ($mode !== 'captcha' && $mode !== 'survey') {
+            $mode = request()->query('mode');
+        }
+        if (empty($redirectTo)) {
+            $redirectTo = request()->query('r');
+        }
 
         $ip = request()->ip();
         $st = $this->state->get($ip);
@@ -27,6 +35,10 @@ class RateLimitedController extends Controller
             if (!empty($st['blocked_until']) && $now < (int) $st['blocked_until']) $mode = 'survey';
             else if (!empty($st['require_captcha'])) $mode = 'captcha';
             else $mode = 'captcha';
+        }
+
+        if ($mode !== 'captcha') {
+            $redirectTo = null;
         }
 
         return view('power-user-survey::rate-limited', [
