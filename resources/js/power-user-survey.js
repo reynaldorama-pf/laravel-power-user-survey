@@ -276,8 +276,20 @@
         if (inFlight) return;
         err.style.display = 'none';
 
-        var tokenEl = document.querySelector('textarea[name="g-recaptcha-response"]');
-        var token = tokenEl ? (tokenEl.value || '').trim() : '';
+        var token = '';
+        if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.getResponse === 'function') {
+          try { token = (grecaptcha.getResponse() || '').trim(); } catch (e) {}
+        }
+        if (!token) {
+          var tokenEls = document.querySelectorAll('textarea[name="g-recaptcha-response"]');
+          for (var i = tokenEls.length - 1; i >= 0; i--) {
+            var candidate = (tokenEls[i].value || '').trim();
+            if (candidate) {
+              token = candidate;
+              break;
+            }
+          }
+        }
 
         if (!token) {
           err.textContent = 'Please complete the CAPTCHA.';
