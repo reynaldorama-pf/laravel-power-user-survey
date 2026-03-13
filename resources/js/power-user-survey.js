@@ -271,6 +271,32 @@
       wrap.appendChild(box);
       ui.body.appendChild(wrap);
 
+      var widgetId = null;
+      function renderWidget() {
+        if (widgetId !== null) return;
+        if (typeof grecaptcha === 'undefined' || typeof grecaptcha.render !== 'function') return;
+        try { widgetId = grecaptcha.render(box, { sitekey: c.recaptchaSiteKey }); } catch (e) {}
+      }
+
+      if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.render === 'function') {
+        renderWidget();
+      } else {
+        var tries = 0;
+        var wait = setInterval(function () {
+          tries++;
+          if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.render === 'function') {
+            clearInterval(wait);
+            renderWidget();
+            return;
+          }
+          if (tries >= 100) {
+            clearInterval(wait);
+            err.textContent = 'Captcha failed to load. Please refresh and try again.';
+            err.style.display = 'block';
+          }
+        }, 100);
+      }
+
       var inFlight = false;
       var btn = el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
         if (inFlight) return;
@@ -278,7 +304,9 @@
 
         var token = '';
         if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.getResponse === 'function') {
-          try { token = (grecaptcha.getResponse() || '').trim(); } catch (e) {}
+          try {
+            token = widgetId !== null ? (grecaptcha.getResponse(widgetId) || '').trim() : (grecaptcha.getResponse() || '').trim();
+          } catch (e) {}
         }
         if (!token) {
           var tokenEls = document.querySelectorAll('textarea[name="g-recaptcha-response"]');
@@ -312,7 +340,12 @@
           err.textContent = 'Captcha failed. Please try again.';
           err.style.display = 'block';
           if (typeof grecaptcha !== 'undefined') {
-            try { grecaptcha.reset(); } catch (e) {}
+            try {
+              if (typeof grecaptcha.reset === 'function') {
+                if (widgetId !== null) grecaptcha.reset(widgetId);
+                else grecaptcha.reset();
+              }
+            } catch (e) {}
           }
         }).finally(function () {
           inFlight = false;
