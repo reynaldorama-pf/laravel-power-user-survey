@@ -114,6 +114,13 @@ class PowerUserRateLimiterMiddleware
         }
         $request->session()->put('pus.last_counted_url', $currentUrl);
 
+        // The very first page render of a new session is never counted — it is always
+        // served for free.  Counting begins from the second unique-URL navigation.
+        if ($previousUrl === '') {
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return $response;
+        }
+
         // Increment pageview for this unique-URL successful page delivery.
         $state['views'] = (int) ($state['views'] ?? 0) + 1;
 
