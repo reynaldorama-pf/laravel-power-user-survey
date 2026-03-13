@@ -55,15 +55,29 @@ class CaptchaController extends Controller
         $ip = $request->ip();
         $state = $this->state->get($ip);
 
+        if (empty($state['require_captcha'])) {
+            return response()->json(['ok' => false, 'error' => 'captcha_not_required'], 200);
+        }
+
         $cooldownMinutes = max(0, (int) config('power-user-survey.limits.cooldown_minutes', 2));
+        $captchaCycles = max(0, (int) config('power-user-survey.limits.captcha_cycles', 3));
         $now = time();
+
+        $isReentryCaptcha = !empty($state['reentry_captcha']);
 
         $state['require_captcha'] = false;
         $state['pending_captcha'] = false;
         $state['reentry_captcha'] = false;
         $state['cooldown_until'] = $now + ($cooldownMinutes * 60);
         $state['views'] = 0;
-        $state['cycle'] = (int) ($state['cycle'] ?? 0) + 1;
+
+        if ($isReentryCaptcha) {
+            // Re-entry captcha (after 24h block) should restart the process,
+            // not count as one of the 3 captcha cycles.
+            $state['cycle'] = 0;
+        } else {
+            $state['cycle'] = min($captchaCycles, ((int) ($state['cycle'] ?? 0)) + 1);
+        }
 
         $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
 
