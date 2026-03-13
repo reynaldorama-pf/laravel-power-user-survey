@@ -19,10 +19,12 @@ class PowerUserNoCacheHtmlMiddleware
         }
 
         $path = '/' . ltrim($request->path(), '/');
+        $rateLimitedPath = '/' . ltrim((string) config('power-user-survey.rate_limited_path', '/rate-limited'), '/');
+        $isRateLimitedPath = strpos($path, $rateLimitedPath) === 0;
 
         foreach ((array) config('power-user-survey.exclude_prefixes', []) as $prefix) {
             $prefix = trim($prefix);
-            if ($prefix !== '' && strpos($path, $prefix) === 0) {
+            if (!$isRateLimitedPath && $prefix !== '' && strpos($path, $prefix) === 0) {
                 return $response;
             }
         }
