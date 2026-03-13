@@ -43,7 +43,7 @@ class PowerUserRateLimiterMiddleware
 
         $state = $this->state->get($ip);
 
-        // Block expired => require captcha to re-enter and reset run
+        // Block expired => require captcha to re-enter
         if (!empty($state['blocked_until']) && $now >= (int) $state['blocked_until']) {
             $state['blocked_until'] = null;
             $state['cycle'] = 0;
@@ -60,12 +60,19 @@ class PowerUserRateLimiterMiddleware
             return $this->redirectToRateLimited($request, 'survey');
         }
 
-        // Cooldown => unlimited browsing
+        // Cooldown => unlimited browsing, no counting
         if (!empty($state['cooldown_until']) && $now < (int) $state['cooldown_until']) {
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
             return $next($request);
         }
 
+        // Captcha required => enforce immediately before serving any content
+        if (!empty($state['require_captcha'])) {
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return $this->redirectToRateLimited($request, 'captcha');
+        }
+
+        // Determine whether this is a real HTML page navigation
         $accept = strtolower((string) $request->header('Accept', ''));
         $secFetchMode = strtolower((string) $request->header('Sec-Fetch-Mode', ''));
         $secFetchDest = strtolower((string) $request->header('Sec-Fetch-Dest', ''));
@@ -79,49 +86,51 @@ class PowerUserRateLimiterMiddleware
             return $next($request);
         }
 
-        // Captcha required => captcha mode (must be enforced before URL-change counting checks).
-        if (!empty($state['require_captcha'])) {
-            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return $this->redirectToRateLimited($request, 'captcha');
+        // Execute the request first, THEN count — this is intentional.
+        // Counting after the response means app-internal redirects (canonical URLs,
+        // trailing-slash normalisation, etc.) are NEVER double-counted: only a real
+        // 200 page delivery increments the view counter.
+        $response = $next($request);
+
+        // Only count 2xx responses (skip redirects, errors)
+        if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+            return $response;
         }
 
-        // Count only when URL changes.
+        // Deduplicate: only count when the URL changes within this session.
+        // Prevents same-page reloads (F5) from inflating the count.
         $currentUrl = (string) $request->fullUrl();
         $previousUrl = (string) $request->session()->get('pus.last_counted_url', '');
         if ($previousUrl !== '' && $previousUrl === $currentUrl) {
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return $next($request);
+            return $response;
         }
         $request->session()->put('pus.last_counted_url', $currentUrl);
 
-        // Count pageview
+        // Increment pageview for this unique-URL successful page delivery.
         $state['views'] = (int) ($state['views'] ?? 0) + 1;
 
-        if ($state['views'] > $pageviews) {
+        if ($state['views'] >= $pageviews) {
             if ((int) ($state['cycle'] ?? 0) >= $captchaCycles) {
-                // Final threshold => 24h block => survey mode
+                // All captcha cycles done => block for PUS_BLOCK_HOURS.
+                // Current page was already served; next request will show survey.
                 $state['blocked_until'] = $now + ($blockHours * 3600);
                 $state['views'] = 0;
                 $state['cooldown_until'] = null;
                 $state['require_captcha'] = false;
                 $state['pending_captcha'] = false;
                 $state['reentry_captcha'] = false;
-
-                $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-                return $this->redirectToRateLimited($request, 'survey');
+            } else {
+                // Set captcha flag for the NEXT request.
+                // Current page was already served; next request will show captcha.
+                $state['require_captcha'] = true;
+                $state['pending_captcha'] = true;
+                $state['views'] = 0;
             }
-
-            // Require captcha
-            $state['require_captcha'] = true;
-            $state['pending_captcha'] = true;
-            $state['views'] = 0;
-
-            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return $this->redirectToRateLimited($request, 'captcha');
         }
 
         $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-        return $next($request);
+        return $response;
     }
 
     protected function redirectToRateLimited($request, $mode)
