@@ -31,10 +31,25 @@ class RateLimitedController extends Controller
         $st = $this->state->get($ip);
         $now = time();
 
+        $isBlocked = !empty($st['blocked_until']) && $now < (int) $st['blocked_until'];
+        $requiresCaptcha = !empty($st['require_captcha']);
+
         if ($mode !== 'captcha' && $mode !== 'survey') {
-            if (!empty($st['blocked_until']) && $now < (int) $st['blocked_until']) $mode = 'survey';
-            else if (!empty($st['require_captcha'])) $mode = 'captcha';
+            if ($isBlocked) $mode = 'survey';
+            else if ($requiresCaptcha) $mode = 'captcha';
             else $mode = 'captcha';
+        }
+
+        if ($mode === 'survey' && !$isBlocked) {
+            request()->session()->forget('pus.rate_limited.mode');
+            request()->session()->forget('pus.rate_limited.redirect_to');
+            return redirect('/');
+        }
+
+        if ($mode === 'captcha' && !$requiresCaptcha) {
+            request()->session()->forget('pus.rate_limited.mode');
+            request()->session()->forget('pus.rate_limited.redirect_to');
+            return redirect($redirectTo ?: '/');
         }
 
         if ($mode !== 'captcha') {
