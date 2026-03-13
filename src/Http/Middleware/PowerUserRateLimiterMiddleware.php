@@ -72,13 +72,20 @@ class PowerUserRateLimiterMiddleware
             return $this->redirectToRateLimited($request, 'captcha');
         }
 
-        // Determine whether this is a real HTML page navigation
-        $accept = strtolower((string) $request->header('Accept', ''));
+        // Determine whether this is a real HTML page navigation.
+        // Modern browsers send Sec-Fetch-Dest/Sec-Fetch-Mode on every fetch; use those
+        // as the primary signal so favicon, manifest, JS, CSS and XHR requests are never
+        // counted.  Fall back to an Accept: text/html check only for old browsers/curl
+        // that do not send Sec-Fetch-* headers at all.
+        $accept       = strtolower((string) $request->header('Accept', ''));
         $secFetchMode = strtolower((string) $request->header('Sec-Fetch-Mode', ''));
         $secFetchDest = strtolower((string) $request->header('Sec-Fetch-Dest', ''));
-        $purpose = strtolower((string) $request->header('Purpose', ''));
-        $isPrefetch = ($purpose === 'prefetch') || (strtolower((string) $request->header('X-Moz', '')) === 'prefetch');
-        $isDocumentNavigation = strpos($accept, 'text/html') !== false || $secFetchMode === 'navigate' || $secFetchDest === 'document';
+        $purpose      = strtolower((string) $request->header('Purpose', ''));
+        $isPrefetch   = ($purpose === 'prefetch') || (strtolower((string) $request->header('X-Moz', '')) === 'prefetch');
+        $hasFetchHeaders = $secFetchMode !== '' || $secFetchDest !== '';
+        $isDocumentNavigation = $hasFetchHeaders
+            ? ($secFetchDest === 'document' || $secFetchMode === 'navigate')
+            : strpos($accept, 'text/html') !== false;
         $shouldCountPageView = $request->isMethod('get') && !$request->ajax() && !$request->expectsJson() && !$isPrefetch && $isDocumentNavigation;
 
         if (!$shouldCountPageView) {
