@@ -5,7 +5,9 @@ namespace PeopleFinders\LaravelPowerUserSurvey;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use PeopleFinders\LaravelPowerUserSurvey\Console\Commands\PublishPowerUserSurveyCommand;
+use PeopleFinders\LaravelPowerUserSurvey\Http\Middleware\PowerUserNoCacheHtmlMiddleware;
 use PeopleFinders\LaravelPowerUserSurvey\Http\Middleware\PowerUserRateLimiterMiddleware;
 
 class PowerUserSurveyServiceProvider extends ServiceProvider
@@ -56,11 +58,16 @@ class PowerUserSurveyServiceProvider extends ServiceProvider
             return "<?php echo \\PeopleFinders\\LaravelPowerUserSurvey\\Views\\Payload::render($expression); ?>";
         });
 
+        $this->app->make(HttpKernel::class)->prependMiddleware(PowerUserNoCacheHtmlMiddleware::class);
+
         $this->registerRoutes();
 
         $router = $this->app['router'];
         $router->aliasMiddleware('power-user-rate-limiter', PowerUserRateLimiterMiddleware::class);
-        $router->pushMiddlewareToGroup('web', PowerUserRateLimiterMiddleware::class);
+        $webGroup = (array) (($router->getMiddlewareGroups()['web'] ?? []));
+        if (!in_array(PowerUserRateLimiterMiddleware::class, $webGroup, true)) {
+            $router->pushMiddlewareToGroup('web', PowerUserRateLimiterMiddleware::class);
+        }
     }
 
     protected function registerRoutes()

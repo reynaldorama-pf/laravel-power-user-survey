@@ -59,12 +59,15 @@ class CaptchaController extends Controller
         $now = time();
 
         $state['require_captcha'] = false;
+        $state['pending_captcha'] = false;
         $state['reentry_captcha'] = false;
         $state['cooldown_until'] = $now + ($cooldownMinutes * 60);
         $state['views'] = 0;
         $state['cycle'] = (int) ($state['cycle'] ?? 0) + 1;
 
         $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+
+        $request->session()->forget('pus.started_counting');
 
         return response()->json(['ok' => true], 200);
     }

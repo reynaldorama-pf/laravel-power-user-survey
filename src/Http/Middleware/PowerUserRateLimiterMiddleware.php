@@ -52,6 +52,7 @@ class PowerUserRateLimiterMiddleware
             $state['views'] = 0;
             $state['cooldown_until'] = null;
             $state['require_captcha'] = true;
+            $state['pending_captcha'] = true;
             $state['reentry_captcha'] = true;
         }
 
@@ -73,6 +74,26 @@ class PowerUserRateLimiterMiddleware
             return $this->redirectToRateLimited($request, 'captcha');
         }
 
+        $accept = strtolower((string) $request->header('Accept', ''));
+        $secFetchMode = strtolower((string) $request->header('Sec-Fetch-Mode', ''));
+        $secFetchDest = strtolower((string) $request->header('Sec-Fetch-Dest', ''));
+        $purpose = strtolower((string) $request->header('Purpose', ''));
+        $isPrefetch = ($purpose === 'prefetch') || (strtolower((string) $request->header('X-Moz', '')) === 'prefetch');
+        $isDocumentNavigation = strpos($accept, 'text/html') !== false || $secFetchMode === 'navigate' || $secFetchDest === 'document';
+        $shouldCountPageView = $request->isMethod('get') && !$request->ajax() && !$request->expectsJson() && !$isPrefetch && $isDocumentNavigation;
+
+        if (!$shouldCountPageView) {
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return $next($request);
+        }
+
+        // First real page load in session should not count.
+        if (!$request->session()->has('pus.started_counting')) {
+            $request->session()->put('pus.started_counting', true);
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return $next($request);
+        }
+
         // Count pageview
         $state['views'] = (int) ($state['views'] ?? 0) + 1;
 
@@ -83,6 +104,7 @@ class PowerUserRateLimiterMiddleware
                 $state['views'] = 0;
                 $state['cooldown_until'] = null;
                 $state['require_captcha'] = false;
+                $state['pending_captcha'] = false;
                 $state['reentry_captcha'] = false;
 
                 $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
@@ -91,6 +113,7 @@ class PowerUserRateLimiterMiddleware
 
             // Require captcha
             $state['require_captcha'] = true;
+            $state['pending_captcha'] = true;
             $state['views'] = 0;
 
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));

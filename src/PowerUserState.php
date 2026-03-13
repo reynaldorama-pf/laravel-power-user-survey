@@ -31,7 +31,9 @@ class PowerUserState
                 'cooldown_until' => null,
                 'blocked_until' => null,
                 'require_captcha' => false,
+                'pending_captcha' => false,
                 'reentry_captcha' => false,
+                'started_counting' => false,
             ];
             return $state;
         }
@@ -43,7 +45,22 @@ class PowerUserState
         $state['cooldown_until'] = !empty($state['cooldown_until']) ? (int) $state['cooldown_until'] : null;
         $state['blocked_until'] = !empty($state['blocked_until']) ? (int) $state['blocked_until'] : null;
         $state['require_captcha'] = !empty($state['require_captcha']);
+        $state['pending_captcha'] = !empty($state['pending_captcha']);
         $state['reentry_captcha'] = !empty($state['reentry_captcha']);
+        $state['started_counting'] = !empty($state['started_counting']);
+
+        if (
+            $state['require_captcha'] &&
+            !$state['pending_captcha'] &&
+            $state['views'] === 0 &&
+            $state['cooldown_until'] === null &&
+            $state['blocked_until'] === null
+        ) {
+            $state['require_captcha'] = false;
+            $state['pending_captcha'] = false;
+            $state['reentry_captcha'] = false;
+            $state['cycle'] = 0;
+        }
 
         if ($state['cooldown_until'] !== null && $state['cooldown_until'] <= $now) {
             $state['cooldown_until'] = null;
@@ -51,6 +68,7 @@ class PowerUserState
 
         if ($state['cooldown_until'] !== null && $state['cooldown_until'] > $now) {
             $state['require_captcha'] = false;
+            $state['pending_captcha'] = false;
             $state['reentry_captcha'] = false;
         }
 
