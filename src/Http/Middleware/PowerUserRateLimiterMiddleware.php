@@ -17,7 +17,6 @@ class PowerUserRateLimiterMiddleware
     public function handle($request, Closure $next)
     {
         if (!config('power-user-survey.enabled')) return $next($request);
-        if ((bool) config('power-user-survey.bypass_rate_limit_rules')) return $next($request);
 
         $path = '/' . ltrim($request->path(), '/');
 

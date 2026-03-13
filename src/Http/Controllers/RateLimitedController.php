@@ -16,12 +16,6 @@ class RateLimitedController extends Controller
 
     public function show()
     {
-        if ((bool) config('power-user-survey.bypass_rate_limit_rules')) {
-            request()->session()->forget('pus.rate_limited.mode');
-            request()->session()->forget('pus.rate_limited.redirect_to');
-            return redirect('/');
-        }
-
         $mode = request()->session()->get('pus.rate_limited.mode'); // captcha|survey
         $redirectTo = request()->session()->get('pus.rate_limited.redirect_to');
 
