@@ -66,12 +66,6 @@ class PowerUserRateLimiterMiddleware
             return $next($request);
         }
 
-        // Captcha required => captcha mode
-        if (!empty($state['require_captcha'])) {
-            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return $this->redirectToRateLimited($request, 'captcha');
-        }
-
         $accept = strtolower((string) $request->header('Accept', ''));
         $secFetchMode = strtolower((string) $request->header('Sec-Fetch-Mode', ''));
         $secFetchDest = strtolower((string) $request->header('Sec-Fetch-Dest', ''));
@@ -88,8 +82,26 @@ class PowerUserRateLimiterMiddleware
         // First real page load in session should not count.
         if (!$request->session()->has('pus.started_counting')) {
             $request->session()->put('pus.started_counting', true);
+
+            if (
+                !empty($state['require_captcha']) &&
+                empty($state['reentry_captcha']) &&
+                empty($state['blocked_until']) &&
+                empty($state['cooldown_until']) &&
+                (int) ($state['views'] ?? 0) === 0
+            ) {
+                $state['require_captcha'] = false;
+                $state['pending_captcha'] = false;
+            }
+
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
             return $next($request);
+        }
+
+        // Captcha required => captcha mode
+        if (!empty($state['require_captcha'])) {
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return $this->redirectToRateLimited($request, 'captcha');
         }
 
         // Count pageview

@@ -260,14 +260,14 @@
       if (!document.getElementById('recaptcha-api')) {
         var s = document.createElement('script');
         s.id = 'recaptcha-api';
-        s.src = 'https://www.google.com/recaptcha/api.js';
+        s.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
         s.async = true;
         s.defer = true;
         document.head.appendChild(s);
       }
 
       var wrap = el('div', { class: 'pus-recaptcha-wrap' });
-      var box = el('div', { class: 'g-recaptcha', 'data-sitekey': c.recaptchaSiteKey });
+      var box = el('div');
       wrap.appendChild(box);
       ui.body.appendChild(wrap);
 
