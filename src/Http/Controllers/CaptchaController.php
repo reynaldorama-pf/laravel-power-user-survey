@@ -71,6 +71,13 @@ class CaptchaController extends Controller
         $captchaCycles = max(0, (int) config('power-user-survey.limits.captcha_cycles'));
         $now = time();
 
+        // Re-read latest state after remote verification to avoid double-increment races
+        // when two verify requests for the same captcha arrive nearly at the same time.
+        $state = $this->state->get($ip);
+        if (empty($state['require_captcha'])) {
+            return response()->json(['ok' => true, 'already_verified' => true], 200);
+        }
+
         $isReentryCaptcha = !empty($state['reentry_captcha']);
 
         $state['require_captcha'] = false;

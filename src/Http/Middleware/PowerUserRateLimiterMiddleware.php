@@ -79,22 +79,10 @@ class PowerUserRateLimiterMiddleware
             return $next($request);
         }
 
-        // Clear stale captcha: captcha required with zero views and no re-entry flag means
-        // the captcha from a prior session was never solved. Any new navigation (new tab,
-        // new incognito window, or same session) should start fresh rather than hitting an
-        // immediate wall. Re-entry captchas (post-24h block) are intentionally NOT cleared.
-        if (
-            !empty($state['require_captcha']) &&
-            empty($state['reentry_captcha']) &&
-            (int) ($state['views'] ?? 0) === 0
-        ) {
-            $state['require_captcha'] = false;
-            $state['pending_captcha'] = false;
-        }
-
         // First real page load in this session should not count toward the page-view limit.
         if (!$request->session()->has('pus.started_counting')) {
             $request->session()->put('pus.started_counting', true);
+            $request->session()->put('pus.last_counted_url', (string) $request->fullUrl());
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
 
             // A re-entry captcha (after 24h block) must be enforced even on the very first load.
@@ -105,6 +93,15 @@ class PowerUserRateLimiterMiddleware
             return $next($request);
         }
 
+        // Count only when URL changes.
+        $currentUrl = (string) $request->fullUrl();
+        $previousUrl = (string) $request->session()->get('pus.last_counted_url', '');
+        if ($previousUrl !== '' && $previousUrl === $currentUrl) {
+            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+            return $next($request);
+        }
+        $request->session()->put('pus.last_counted_url', $currentUrl);
+
         // Captcha required => captcha mode
         if (!empty($state['require_captcha'])) {
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
@@ -114,7 +111,7 @@ class PowerUserRateLimiterMiddleware
         // Count pageview
         $state['views'] = (int) ($state['views'] ?? 0) + 1;
 
-        if ($state['views'] >= $pageviews) {
+        if ($state['views'] > $pageviews) {
             if ((int) ($state['cycle'] ?? 0) >= $captchaCycles) {
                 // Final threshold => 24h block => survey mode
                 $state['blocked_until'] = $now + ($blockHours * 3600);
