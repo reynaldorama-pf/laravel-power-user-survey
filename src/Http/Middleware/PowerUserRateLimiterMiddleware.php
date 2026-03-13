@@ -37,11 +37,9 @@ class PowerUserRateLimiterMiddleware
 
         $ip = $request->ip();
         $now = time();
-        $limits = (array) config('power-user-survey.limits');
-
-        $pageviews = max(1, (int) ($limits['pageviews_per_cycle'] ?? 5));
-        $captchaCycles = max(0, (int) ($limits['captcha_cycles'] ?? 3));
-        $blockHours = max(1, (int) ($limits['block_hours'] ?? 24));
+        $pageviews = max(1, (int) config('power-user-survey.limits.pageviews_per_cycle'));
+        $captchaCycles = max(0, (int) config('power-user-survey.limits.captcha_cycles'));
+        $blockHours = max(1, (int) config('power-user-survey.limits.block_hours'));
 
         $state = $this->state->get($ip);
 

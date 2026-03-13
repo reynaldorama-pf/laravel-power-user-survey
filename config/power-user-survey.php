@@ -1,13 +1,13 @@
 <?php
 
 return [
-    'enabled' => env('PUS_ENABLED', true),
+    'enabled' => env('PUS_ENABLE', env('PUS_ENABLED', true)),
 
     // App label shown in survey copy
     'app_name' => env('PUS_APP_NAME', 'This App'),
 
     // Survey API (browser calls)
-    'survey_base_url' => env('PUS_BASE_URL', 'https://angs3br1jh.execute-api.us-east-1.amazonaws.com/prod'),
+    'survey_base_url' => env('PUS_SURVEY_BASE_URL', env('PUS_BASE_URL', 'https://angs3br1jh.execute-api.us-east-1.amazonaws.com/prod')),
     'survey_api_key'  => env('PUS_API_KEY', ''),
 
     // Site ID derived from APP_URL unless overridden

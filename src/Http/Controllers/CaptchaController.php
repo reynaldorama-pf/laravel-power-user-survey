@@ -22,6 +22,15 @@ class CaptchaController extends Controller
             return response()->json(['ok' => false, 'error' => 'disabled'], 400);
         }
 
+        $ip = $request->ip();
+        $state = $this->state->get($ip);
+
+        // Idempotent success: if captcha is no longer required (e.g. first verify
+        // already succeeded and a duplicate request arrived), treat as success.
+        if (empty($state['require_captcha'])) {
+            return response()->json(['ok' => true, 'already_verified' => true], 200);
+        }
+
         $token = (string) $request->input('token', '');
         if ($token === '') {
             return response()->json(['ok' => false, 'error' => 'missing_token'], 400);
@@ -50,17 +59,16 @@ class CaptchaController extends Controller
         }
 
         $success = is_array($data) && !empty($data['success']);
-        if (!$success) return response()->json(['ok' => false], 200);
-
-        $ip = $request->ip();
-        $state = $this->state->get($ip);
-
-        if (empty($state['require_captcha'])) {
-            return response()->json(['ok' => false, 'error' => 'captcha_not_required'], 200);
+        if (!$success) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'captcha_failed',
+                'error_codes' => is_array($data) ? (array) ($data['error-codes'] ?? []) : [],
+            ], 200);
         }
 
-        $cooldownMinutes = max(0, (int) config('power-user-survey.limits.cooldown_minutes', 2));
-        $captchaCycles = max(0, (int) config('power-user-survey.limits.captcha_cycles', 3));
+        $cooldownMinutes = max(0, (int) config('power-user-survey.limits.cooldown_minutes'));
+        $captchaCycles = max(0, (int) config('power-user-survey.limits.captcha_cycles'));
         $now = time();
 
         $isReentryCaptcha = !empty($state['reentry_captcha']);

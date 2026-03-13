@@ -271,7 +271,9 @@
       wrap.appendChild(box);
       ui.body.appendChild(wrap);
 
+      var inFlight = false;
       var btn = el('button', { class: 'pus-btn pus-btn-primary pus-btn-full', text: 'CONTINUE', onclick: function () {
+        if (inFlight) return;
         err.style.display = 'none';
 
         var tokenEl = document.querySelector('textarea[name="g-recaptcha-response"]');
@@ -283,11 +285,15 @@
           return;
         }
 
+        inFlight = true;
+        btn.disabled = true;
+        btn.textContent = 'VERIFYING...';
+
         httpJson('/power-user-survey/recaptcha/verify', 'POST', {
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest'
         }, { token: token }).then(function (data) {
-          if (data && data.ok) {
+          if (data && (data.ok || data.already_verified)) {
             window.location.href = c.redirectTo || '/';
             return;
           }
@@ -296,6 +302,10 @@
           if (typeof grecaptcha !== 'undefined') {
             try { grecaptcha.reset(); } catch (e) {}
           }
+        }).finally(function () {
+          inFlight = false;
+          btn.disabled = false;
+          btn.textContent = 'CONTINUE';
         });
       }});
       ui.setFooterSingle(btn);
