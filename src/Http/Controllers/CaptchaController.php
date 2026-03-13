@@ -96,7 +96,7 @@ class CaptchaController extends Controller
 
         $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
 
-        $request->session()->forget(['pus.started_counting', 'pus.last_counted_url']);
+        $request->session()->forget(['pus.last_counted_url']);
 
         return response()->json(['ok' => true], 200);
     }

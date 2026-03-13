@@ -114,9 +114,12 @@ class PowerUserRateLimiterMiddleware
         }
         $request->session()->put('pus.last_counted_url', $currentUrl);
 
-        // The very first page render of a new session is never counted — it is always
-        // served for free.  Counting begins from the second unique-URL navigation.
-        if ($previousUrl === '') {
+        // The very first countable page render of a browser session is never counted.
+        // Do this only once per session; captcha/cooldown cycles should not receive
+        // an extra free page.
+        $startedCounting = (bool) $request->session()->get('pus.started_counting', false);
+        if (!$startedCounting) {
+            $request->session()->put('pus.started_counting', true);
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
             return $response;
         }
