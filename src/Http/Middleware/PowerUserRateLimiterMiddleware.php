@@ -79,25 +79,25 @@ class PowerUserRateLimiterMiddleware
             return $next($request);
         }
 
-        // First real page load in session should not count.
+        // Clear stale captcha: captcha required with zero views and no re-entry flag means
+        // the captcha from a prior session was never solved. Any new navigation (new tab,
+        // new incognito window, or same session) should start fresh rather than hitting an
+        // immediate wall. Re-entry captchas (post-24h block) are intentionally NOT cleared.
+        if (
+            !empty($state['require_captcha']) &&
+            empty($state['reentry_captcha']) &&
+            (int) ($state['views'] ?? 0) === 0
+        ) {
+            $state['require_captcha'] = false;
+            $state['pending_captcha'] = false;
+        }
+
+        // First real page load in this session should not count toward the page-view limit.
         if (!$request->session()->has('pus.started_counting')) {
             $request->session()->put('pus.started_counting', true);
-
-            // Clear stale captcha from a previous session (but NOT a re-entry captcha after 24h block).
-            if (
-                !empty($state['require_captcha']) &&
-                empty($state['reentry_captcha']) &&
-                empty($state['blocked_until']) &&
-                empty($state['cooldown_until']) &&
-                (int) ($state['views'] ?? 0) === 0
-            ) {
-                $state['require_captcha'] = false;
-                $state['pending_captcha'] = false;
-            }
-
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
 
-            // If captcha is still required (e.g. legitimate re-entry after 24h block), enforce it.
+            // A re-entry captcha (after 24h block) must be enforced even on the very first load.
             if (!empty($state['require_captcha'])) {
                 return $this->redirectToRateLimited($request, 'captcha');
             }
