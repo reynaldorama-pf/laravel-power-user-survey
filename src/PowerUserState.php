@@ -49,19 +49,6 @@ class PowerUserState
         $state['reentry_captcha'] = !empty($state['reentry_captcha']);
         $state['started_counting'] = !empty($state['started_counting']);
 
-        if (
-            $state['require_captcha'] &&
-            !$state['pending_captcha'] &&
-            $state['views'] === 0 &&
-            $state['cooldown_until'] === null &&
-            $state['blocked_until'] === null
-        ) {
-            $state['require_captcha'] = false;
-            $state['pending_captcha'] = false;
-            $state['reentry_captcha'] = false;
-            $state['cycle'] = 0;
-        }
-
         if ($state['cooldown_until'] !== null && $state['cooldown_until'] <= $now) {
             $state['cooldown_until'] = null;
         }

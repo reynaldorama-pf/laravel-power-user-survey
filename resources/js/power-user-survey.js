@@ -272,21 +272,25 @@
       ui.body.appendChild(wrap);
 
       var widgetId = null;
-      function renderWidget() {
+      function doRender() {
         if (widgetId !== null) return;
-        if (typeof grecaptcha === 'undefined' || typeof grecaptcha.render !== 'function') return;
-        try { widgetId = grecaptcha.render(box, { sitekey: c.recaptchaSiteKey }); } catch (e) {}
+        try {
+          widgetId = grecaptcha.render(box, { sitekey: c.recaptchaSiteKey });
+        } catch (e) {
+          err.textContent = 'Captcha failed to load. Please refresh and try again.';
+          err.style.display = 'block';
+        }
       }
 
-      if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.render === 'function') {
-        renderWidget();
+      if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.ready === 'function') {
+        grecaptcha.ready(doRender);
       } else {
         var tries = 0;
         var wait = setInterval(function () {
           tries++;
-          if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.render === 'function') {
+          if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.ready === 'function') {
             clearInterval(wait);
-            renderWidget();
+            grecaptcha.ready(doRender);
             return;
           }
           if (tries >= 100) {
@@ -329,9 +333,12 @@
         btn.disabled = true;
         btn.textContent = 'VERIFYING...';
 
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = csrfMeta ? (csrfMeta.getAttribute('content') || '') : '';
         httpJson('/power-user-survey/recaptcha/verify', 'POST', {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': csrfToken
         }, { token: token }).then(function (data) {
           if (data && (data.ok || data.already_verified)) {
             window.location.href = c.redirectTo || '/';

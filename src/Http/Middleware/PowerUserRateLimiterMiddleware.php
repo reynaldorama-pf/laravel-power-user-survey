@@ -83,6 +83,7 @@ class PowerUserRateLimiterMiddleware
         if (!$request->session()->has('pus.started_counting')) {
             $request->session()->put('pus.started_counting', true);
 
+            // Clear stale captcha from a previous session (but NOT a re-entry captcha after 24h block).
             if (
                 !empty($state['require_captcha']) &&
                 empty($state['reentry_captcha']) &&
@@ -95,6 +96,12 @@ class PowerUserRateLimiterMiddleware
             }
 
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
+
+            // If captcha is still required (e.g. legitimate re-entry after 24h block), enforce it.
+            if (!empty($state['require_captcha'])) {
+                return $this->redirectToRateLimited($request, 'captcha');
+            }
+
             return $next($request);
         }
 
@@ -107,7 +114,7 @@ class PowerUserRateLimiterMiddleware
         // Count pageview
         $state['views'] = (int) ($state['views'] ?? 0) + 1;
 
-        if ($state['views'] > $pageviews) {
+        if ($state['views'] >= $pageviews) {
             if ((int) ($state['cycle'] ?? 0) >= $captchaCycles) {
                 // Final threshold => 24h block => survey mode
                 $state['blocked_until'] = $now + ($blockHours * 3600);
