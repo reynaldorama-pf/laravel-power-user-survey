@@ -217,6 +217,15 @@ PUS_RECAPTCHA_SITE_KEY=YOUR_SITE_KEY
 PUS_RECAPTCHA_SECRET_KEY=YOUR_SECRET_KEY
 ```
 
+### Rate-limit bypass toggle
+
+```
+PUS_BYPASS_RATE_LIMIT_RULES=false
+```
+
+- `true`: bypasses all Power User Survey rate-limit rules (no 5-pageview captcha flow, no cooldown, no block).
+- `false`: keeps normal rate-limit behavior.
+
 ---
 
 # Enable Middleware

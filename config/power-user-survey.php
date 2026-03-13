@@ -3,6 +3,9 @@
 return [
     'enabled' => env('PUS_ENABLE', env('PUS_ENABLED', true)),
 
+    // Global bypass for all rate-limit rules (captcha/cooldown/block)
+    'bypass_rate_limit_rules' => env('PUS_BYPASS_RATE_LIMIT_RULES', false),
+
     // App label shown in survey copy
     'app_name' => env('PUS_APP_NAME', 'This App'),
 
