@@ -79,18 +79,10 @@ class PowerUserRateLimiterMiddleware
             return $next($request);
         }
 
-        // First real page load in this session should not count toward the page-view limit.
-        if (!$request->session()->has('pus.started_counting')) {
-            $request->session()->put('pus.started_counting', true);
-            $request->session()->put('pus.last_counted_url', (string) $request->fullUrl());
+        // Captcha required => captcha mode (must be enforced before URL-change counting checks).
+        if (!empty($state['require_captcha'])) {
             $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-
-            // A re-entry captcha (after 24h block) must be enforced even on the very first load.
-            if (!empty($state['require_captcha'])) {
-                return $this->redirectToRateLimited($request, 'captcha');
-            }
-
-            return $next($request);
+            return $this->redirectToRateLimited($request, 'captcha');
         }
 
         // Count only when URL changes.
@@ -101,12 +93,6 @@ class PowerUserRateLimiterMiddleware
             return $next($request);
         }
         $request->session()->put('pus.last_counted_url', $currentUrl);
-
-        // Captcha required => captcha mode
-        if (!empty($state['require_captcha'])) {
-            $this->state->put($ip, $state, $this->state->ttlSecondsFor($state));
-            return $this->redirectToRateLimited($request, 'captcha');
-        }
 
         // Count pageview
         $state['views'] = (int) ($state['views'] ?? 0) + 1;
